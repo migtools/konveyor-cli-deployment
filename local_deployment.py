@@ -2,15 +2,17 @@ import logging
 import os
 
 import config
-from utils.images import remove_old_images, generate_images_list, pull_tag_images, pull_stage_ga_images
+from utils.images import remove_old_images, generate_images_list, pull_tag_images, pull_stage_ga_images, \
+    generate_konflux_images_list, pull_images_by_list
 from utils.utils import read_file, get_target_dependency_path, get_latest_upstream_dependency, download_file, \
-    pull_stage_ga_dependency_file, ensure_podman_running
-from utils.zip import generate_zip, get_zip_folder_name, get_zip_name, unpack_zip
+    pull_stage_ga_dependency_file, ensure_podman_running, normalise_url
+from utils.zip import generate_zip, get_zip_folder_name, get_zip_name, unpack_zip, generate_konflux_zip
 
 
 def run_local_deployment(data):
     version = data["version"]
     build = data["build"]
+    url = data["image"]
     if data["args_upstream"]:
         upstream = True
     else:
@@ -18,30 +20,51 @@ def run_local_deployment(data):
     image_output_file = data["args_image_output_file"]
     arg_dependency_file = data["args_dependency_file"]
     ensure_podman_running()
-    if version and build and not upstream:
+    if version and not upstream:
+        version_tuple = tuple(map(int, version.split('.')))
         remove_old_images(version)
-        logging.info(f"Deploying MTA Version: {version} {build}")
-        if build == "stage" or build == "candidate" or build == "ga":
-            pull_stage_ga_images(version, build)
-            full_zip_name = pull_stage_ga_dependency_file(version, build)
+        if version_tuple < (8, 1, 0):
+            logging.info(f"Deploying MTA Version: {version} {build}")
+            if build == "stage" or build == "candidate" or build == "ga":
+                pull_stage_ga_images(version, build)
+                full_zip_name = pull_stage_ga_dependency_file(version, build)
+            else:
+                if not image_output_file:
+                    logging.info(f"Generating images list for {version}-{build}")
+                    image_list, stdout_err = generate_images_list(version, build)
+                else:
+                    logging.info(f"Using images list provided as CLI argument: {image_output_file}")
+                    image_list = read_file(image_output_file)
+                pull_tag_images(version, image_list)
+                if not arg_dependency_file:
+                    logging.info(f"Generating dependencies zip for {version}-{build}")
+                    generate_zip(version, build)
+                    zip_folder_name = get_zip_folder_name(image_list)
+                    zip_name = get_zip_name(zip_folder_name.split("-")[1])
+                    full_zip_name = os.path.join(config.MISC_DOWNSTREAM_PATH, zip_folder_name, zip_name)
+                    logging.info (f"Using generated zip dependency file: {full_zip_name}")
+                else:
+                    full_zip_name=arg_dependency_file
+                    logging.info(f"Using existing dependencies zip: {full_zip_name}")
         else:
+            logging.info(f"Deploying MTA Version: {version}, image: {url}")
+            normalised_url = normalise_url(version, url)
             if not image_output_file:
-                logging.info(f"Generating images list for {version}-{build}")
-                image_list, stdout_err = generate_images_list(version, build)
+                logging.info(f"Generating images list for {version}, image: {url}")
+                image_list = generate_konflux_images_list(normalised_url)
             else:
                 logging.info(f"Using images list provided as CLI argument: {image_output_file}")
                 image_list = read_file(image_output_file)
-            pull_tag_images(version, image_list)
+            pull_images_by_list(version, image_list)
             if not arg_dependency_file:
-                logging.info(f"Generating dependencies zip for {version}-{build}")
-                generate_zip(version, build)
-                zip_folder_name = get_zip_folder_name(image_list)
-                zip_name = get_zip_name(zip_folder_name.split("-")[1])
+                logging.info(f"Generating dependencies zip for {version}, image: {url}")
+                zip_folder_name = generate_konflux_zip(normalised_url)
+                zip_name = get_zip_name(version)
                 full_zip_name = os.path.join(config.MISC_DOWNSTREAM_PATH, zip_folder_name, zip_name)
-                logging.info (f"Using generated zip dependency file: {full_zip_name}")
             else:
                 full_zip_name=arg_dependency_file
                 logging.info(f"Using existing dependencies zip: {full_zip_name}")
+
     else:
         print("Deploying Kantra latest")
         if not arg_dependency_file:

@@ -326,3 +326,9 @@ def ensure_podman_running(client=None):
             print("Podman machine started successfully.")
     else:
         print("Podman is already running.")
+
+def normalise_url(version, url):
+    if not url:
+        raise ValueError("--image argument cannot be empty since MTA 8.1.0+")
+    stdout, stderr = run_command(f"opm alpha list bundles {url} | grep {version} | awk '{{print $6}}' | sed 's/registry.redhat.io/registry.stage.redhat.io/'")
+    return stdout.strip()

@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import zipfile
 
 import config
@@ -92,3 +93,29 @@ def generate_zip(version, build):
     """Generates zip with dependencies for local run"""
     extract_binary_command = f"{config.MISC_DOWNSTREAM_PATH}{config.EXTRACT_BINARY} {config.BUNDLE}{version}-{build} {config.NO_BREW}"
     run_command(extract_binary_command)
+
+
+def generate_konflux_zip(image_url):
+    """Generates zip with dependencies for local run and returns the output path"""
+    # Use os.path.join for safety
+    binary_path = os.path.join(config.MISC_DOWNSTREAM_PATH, config.EXTRACT_BINARY_KONFLUX)
+    extract_binary_command = f"{binary_path} {image_url}"
+
+    stdout, stderr = run_command(extract_binary_command)
+
+    # Check for success marker in stdout
+    if "success" in stdout.lower():
+        match = re.search(r"Success! Output in:\s*(.*)", stdout)
+        if match:
+            # .group(1) extracts the actual path string, .strip() removes \n
+            output_path = match.group(1).strip()
+            logging.info(f"Binary extraction successful. Path: {output_path}")
+            return output_path
+        else:
+            logging.error("Success marker found, but failed to parse output path.")
+
+    # Log stderr if it exists, even if we don't return None immediately
+    if stderr:
+        logging.warning(f"Extraction command generated stderr: {stderr}")
+
+    return None
