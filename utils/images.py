@@ -1,5 +1,9 @@
 import logging
+import os
+import shutil
 import subprocess
+
+import yaml
 
 import config
 from utils.const import related_images, repositories, basic_images
@@ -41,6 +45,7 @@ def pull_stage_ga_images(mta_version, repo, client=None):
     Pulls images for Stage / GA
     :param mta_version: MTA version to be pulled
     :param repo: either ga or stage to be pulled
+    :param client: SSH client for remote deployment
     :return:
     """
     required_version_tuple = (7, 3, 0)
@@ -62,6 +67,33 @@ def pull_stage_ga_images(mta_version, repo, client=None):
             run_command(tag_command, client=client)
             logging.info(f"Tagged image {image} to ga")
 
+
+def pull_images_by_list(mta_version, image_list, client=None):
+    # Keywords to filter images
+    keywords = ['java', 'generic', 'dotnet', 'cli']
+
+    for image in image_list:
+        # Check if the image name contains any of the required keywords
+        if not any(key in image for key in keywords):
+            logging.debug(f"Skipping image {image} as it does not match keywords")
+            continue
+
+        # 1. Pull the image
+        pull_command = f"podman pull {image}"
+        run_command(pull_command, client=client)
+        logging.info(f"Successfully pulled image: {image}")
+
+        # 2. Extract short name for tagging (optional but recommended)
+        # Example: registry.stage.redhat.io/mta/mta-java-app@sha256:... -> mta-java-app
+        image_short_name = image.split('/')[-1].split('@')[0]
+
+        # 3. Tag the image based on the repository type (GA repository)
+        ga_repo = repositories.get('ga')
+        target_tag = f"{ga_repo}/mta/{image_short_name}:{mta_version}"
+
+        tag_command = f"podman tag {image} {target_tag}"
+        run_command(tag_command, client=client)
+        logging.info(f"Tagged image {image_short_name} as {target_tag}")
 
 def remove_old_images(version="upstream", client=None):
     """
@@ -102,3 +134,51 @@ def generate_images_list(version, build):
     """
     get_images_output_command = f'cd {config.MISC_DOWNSTREAM_PATH}; ./{config.GET_IMAGES_OUTPUT}{config.BUNDLE}{version}-{build}'
     return run_command(get_images_output_command)
+
+
+def generate_konflux_images_list(url):
+    container_name = "tmp-bundle"
+    manifests_dir = "./manifests"
+    file_path = os.path.join(manifests_dir, "konveyor-operator.clusterserviceversion.yaml")
+    images_list = []
+
+    try:
+        # 1. Create the container
+        get_images_command = f"podman create --name {container_name} {url} /bin/true"
+
+        image_id, error = run_command(get_images_command)
+
+        if error:
+            print(f"Error: Failed to create podman container. Details: {error}")
+            return []
+
+        # 2. Copy manifests from the container to the local filesystem
+        run_command(f"podman cp {container_name}:/manifests ./")
+
+        # 3. Parse the CSV YAML file
+        if not os.path.exists(file_path):
+            print(f"Error: Target file not found at {file_path}")
+            return []
+
+        with open(file_path, 'r') as f:
+            data = yaml.safe_load(f) or {}
+
+        related_images = data.get('spec', {}).get('relatedImages', [])
+
+        # 4. Extract and transform image URLs
+        images_list = [
+            item['image'].replace("registry.redhat.io", "registry.stage.redhat.io")
+            for item in related_images if 'image' in item
+        ]
+
+    except yaml.YAMLError as ye:
+        print(f"Error: Failed to parse YAML file. Details: {ye}")
+    except Exception as e:
+        print(f"Unexpected error occurred: {e}")
+    finally:
+        # 5. Cleanup: Always remove the container and the copied manifests
+        run_command(f"podman rm -f {container_name}")
+        if os.path.exists(manifests_dir):
+            shutil.rmtree(manifests_dir, ignore_errors=True)
+    print (images_list)
+    return images_list

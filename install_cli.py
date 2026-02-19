@@ -23,6 +23,7 @@ if __name__ == "__main__":
         description="Deploys and prepares MTA CLI either locally or remotely.")
     parser.add_argument('--mta_version', required=False, help="The MTA version to use.", action=ValidateArguments)
     parser.add_argument('--build', required=False, help="Build number to use", action=ValidateArguments)
+    parser.add_argument('--image', required=False, help="Image URL to use (if using konflux)", action=ValidateArguments)
     parser.add_argument('--upstream', required=False,
                         help='Optional, forces latest upstream deployment instead of downstream',
                         action=ValidateArguments)
@@ -40,6 +41,7 @@ if __name__ == "__main__":
     if not args.ip_address:
         run_local_deployment({"version": args.mta_version,
                               "build": args.build,
+                              "image": args.image,
                               "args_image_output_file": args.image_output_file,
                               "args_dependency_file": args.dependency_file,
                               "args_upstream": args.upstream
@@ -47,6 +49,7 @@ if __name__ == "__main__":
     else:
         run_remote_deployment({"version": args.mta_version,
                                "build": args.build,
+                               "image": args.image,
                                "args_image_output_file": args.image_output_file,
                                "args_dependency_file": args.dependency_file,
                                "args_upstream": args.upstream,
