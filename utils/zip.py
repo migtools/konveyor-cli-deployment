@@ -96,10 +96,11 @@ def generate_zip(version, build):
 
 
 def generate_konflux_zip(image_url):
-    """Generates zip with dependencies for local run and returns the output path"""
-    # Use os.path.join for safety
+    """Generates zip with dependencies for local run and returns the output path.
+    Runs from MISC_DOWNSTREAM_PATH so mta-cli-extracted is created there, not in CWD."""
+    # Use os.path.join for safety; run from misc-downstream so output dir is created there
     binary_path = os.path.join(config.MISC_DOWNSTREAM_PATH, config.EXTRACT_BINARY_KONFLUX)
-    extract_binary_command = f"{binary_path} {image_url}"
+    extract_binary_command = f"cd {config.MISC_DOWNSTREAM_PATH} && {binary_path} {image_url}"
 
     stdout, stderr = run_command(extract_binary_command)
 
