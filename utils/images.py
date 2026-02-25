@@ -136,24 +136,25 @@ def generate_images_list(version, build):
     return run_command(get_images_output_command)
 
 
-def generate_konflux_images_list(url):
+def generate_konflux_images_list(url=None, file=None):
     container_name = "tmp-bundle"
     manifests_dir = "./manifests"
     file_path = os.path.join(manifests_dir, "konveyor-operator.clusterserviceversion.yaml")
     images_list = []
+    created_container = False
 
     try:
-        # 1. Create the container
-        get_images_command = f"podman create --name {container_name} {url} /bin/true"
+        if url:
+            # 1. Create the container (run_command raises on failure)
+            get_images_command = f"podman create --name {container_name} {url} /bin/true"
+            run_command(get_images_command)
+            created_container = True
 
-        image_id, error = run_command(get_images_command)
+            # 2. Copy manifests from the container to the local filesystem
+            run_command(f"podman cp {container_name}:/manifests ./")
 
-        if error:
-            print(f"Error: Failed to create podman container. Details: {error}")
-            return []
-
-        # 2. Copy manifests from the container to the local filesystem
-        run_command(f"podman cp {container_name}:/manifests ./")
+        elif file:
+            file_path = file
 
         # 3. Parse the CSV YAML file
         if not os.path.exists(file_path):
@@ -176,9 +177,10 @@ def generate_konflux_images_list(url):
     except Exception as e:
         print(f"Unexpected error occurred: {e}")
     finally:
-        # 5. Cleanup: Always remove the container and the copied manifests
-        run_command(f"podman rm -f {container_name}")
-        if os.path.exists(manifests_dir):
-            shutil.rmtree(manifests_dir, ignore_errors=True)
-    print (images_list)
+        # 5. Cleanup: only remove container and manifests when we created them (url path)
+        if created_container:
+            run_command(f"podman rm -f {container_name}")
+            if os.path.exists(manifests_dir):
+                shutil.rmtree(manifests_dir, ignore_errors=True)
+    print(images_list)
     return images_list

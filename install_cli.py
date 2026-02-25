@@ -24,6 +24,7 @@ if __name__ == "__main__":
     parser.add_argument('--mta_version', required=False, help="The MTA version to use.", action=ValidateArguments)
     parser.add_argument('--build', required=False, help="Build number to use", action=ValidateArguments)
     parser.add_argument('--image', required=False, help="Image URL to use (if using konflux)", action=ValidateArguments)
+    parser.add_argument('--normalized_url', required=False, help="Normalized URL to use (to avoid using `opm` if using konflux)", action=ValidateArguments)
     parser.add_argument('--upstream', required=False,
                         help='Optional, forces latest upstream deployment instead of downstream',
                         action=ValidateArguments)
@@ -42,6 +43,7 @@ if __name__ == "__main__":
         run_local_deployment({"version": args.mta_version,
                               "build": args.build,
                               "image": args.image,
+                              "normalized_url": args.normalized_url,
                               "args_image_output_file": args.image_output_file,
                               "args_dependency_file": args.dependency_file,
                               "args_upstream": args.upstream
@@ -50,6 +52,7 @@ if __name__ == "__main__":
         run_remote_deployment({"version": args.mta_version,
                                "build": args.build,
                                "image": args.image,
+                               "normalized_url": args.normalized_url,
                                "args_image_output_file": args.image_output_file,
                                "args_dependency_file": args.dependency_file,
                                "args_upstream": args.upstream,
@@ -57,4 +60,3 @@ if __name__ == "__main__":
                                "args_os": args.os,
                                "args_platform": args.platform
                           })
-

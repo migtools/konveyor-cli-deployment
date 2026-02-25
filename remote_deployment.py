@@ -12,7 +12,8 @@ from utils.zip import generate_zip, get_zip_folder_name, get_zip_name, unpack_zi
 def run_remote_deployment(data):
     version = data["version"]
     build = data["build"]
-    url = data["image"]
+    image = data["image"]
+    normalized_url = data["normalized_url"]
     image_output_file = data["args_image_output_file"]
     arg_dependency_file = data["args_dependency_file"]
     ip_address = data["args_ip_address"]
@@ -58,18 +59,19 @@ def run_remote_deployment(data):
                         full_zip_name = arg_dependency_file
                         logging.info(f"Using existing dependencies zip: {full_zip_name}")
             else:
-                logging.info(f"Deploying MTA Version: {version}, image: {url}")
-                normalised_url = normalise_url(version, url)
+                logging.info(f"Deploying MTA Version: {version}, image: {image}")
+                if not normalized_url or normalized_url == "":
+                    normalized_url = normalise_url(version, image)
                 if not image_output_file:
-                    logging.info(f"Generating images list for {version}, image: {url}")
-                    image_list = generate_konflux_images_list(normalised_url)
+                    logging.info(f"Generating images list for {version}, image: {image}")
+                    image_list = generate_konflux_images_list(url=normalized_url)
                 else:
                     logging.info(f"Using images list provided as CLI argument: {image_output_file}")
-                    image_list = read_file(image_output_file)
+                    image_list = generate_konflux_images_list(file=image_output_file)
                 pull_images_by_list(version, image_list, client=client)
                 if not arg_dependency_file:
-                    logging.info(f"Generating dependencies zip for {version}, image: {url}")
-                    zip_folder_name = generate_konflux_zip(normalised_url)
+                    logging.info(f"Generating dependencies zip for {version}, image: {image}")
+                    zip_folder_name = generate_konflux_zip(normalized_url)
                     zip_name = get_zip_name(version, host_os, host_platform)
                     full_zip_name = os.path.join(config.MISC_DOWNSTREAM_PATH, zip_folder_name, zip_name)
                 else:
@@ -79,9 +81,9 @@ def run_remote_deployment(data):
             logging.info("Deploying Kantra latest")
             if not arg_dependency_file:
                 full_zip_name = get_zip_name("upstream", host_os, host_platform)
-                url = get_latest_upstream_dependency('konveyor', 'kantra', full_zip_name)
+                image = get_latest_upstream_dependency('konveyor', 'kantra', full_zip_name)
                 logging.info("Downloading dependencies zip for upstream")
-                download_file(url, full_zip_name)
+                download_file(image, full_zip_name)
                 full_zip_name = os.path.abspath(full_zip_name)
             else:
                 full_zip_name = arg_dependency_file
