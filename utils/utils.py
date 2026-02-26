@@ -21,7 +21,7 @@ from utils.const import zip_urls
 
 # Logging configuration
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s]: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers = [
