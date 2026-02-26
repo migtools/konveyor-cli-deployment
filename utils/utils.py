@@ -330,5 +330,35 @@ def ensure_podman_running(client=None):
 def normalise_url(version, url):
     if not url:
         raise ValueError("--image argument cannot be empty since MTA 8.1.0+")
-    stdout, stderr = run_command(f"opm alpha list bundles {url} | grep {version} | awk '{{print $6}}' | sed 's/registry.redhat.io/registry.stage.redhat.io/'")
-    return stdout.strip()
+    docker_config = os.path.expanduser("~/.docker/config.json")
+    if platform.system() == "Windows":
+        docker_config = os.path.normpath(docker_config).replace("\\", "/")
+    # :Z is SELinux-only; use only on Linux so Mac/Windows are not affected
+    volume_suffix = ":Z" if platform.system() == "Linux" else ""
+    volume = f"{docker_config}:/root/.docker/config.json{volume_suffix}"
+    inner_cmd = (
+        'opm alpha list bundles "$OPM_URL" | grep "$OPM_VERSION" | '
+        "awk '{print $6}' | sed 's/registry.redhat.io/registry.stage.redhat.io/'"
+    )
+    cmd = [
+        "podman", "run", "--rm",
+        "-v", volume,
+        "-e", f"OPM_URL={url}",
+        "-e", f"OPM_VERSION={version}",
+        "--entrypoint", "/bin/sh",
+        "quay.io/migqe/migqe-base:latest",
+        "-c", inner_cmd,
+    ]
+    logging.info(f"Executing command: opm (in container) for url={url!r}, version={version}")
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(
+            f"opm container command failed with exit code {result.returncode}\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return result.stdout.strip()
