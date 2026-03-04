@@ -333,22 +333,24 @@ def normalise_url(version, url):
     docker_config = os.path.expanduser("~/.docker/config.json")
     if platform.system() == "Windows":
         docker_config = os.path.normpath(docker_config).replace("\\", "/")
-    # :Z is SELinux-only; use only on Linux so Mac/Windows are not affected
-    volume_suffix = ":Z" if platform.system() == "Linux" else ""
-    volume = f"{docker_config}:/root/.docker/config.json{volume_suffix}"
     inner_cmd = (
         'opm alpha list bundles "$OPM_URL" | grep "$OPM_VERSION" | '
         "awk '{print $6}' | sed 's/registry.redhat.io/registry.stage.redhat.io/'"
     )
     cmd = [
         "podman", "run", "--rm",
-        "-v", volume,
         "-e", f"OPM_URL={url}",
         "-e", f"OPM_VERSION={version}",
         "--entrypoint", "/bin/sh",
         "quay.io/migqe/migqe-base:latest",
         "-c", inner_cmd,
     ]
+    # Mount registry auth only if present; skip mount to avoid "no such file" and
+    # to allow public registries to work without any login config.
+    if os.path.isfile(docker_config):
+        volume_suffix = ":Z" if platform.system() == "Linux" else ""
+        volume = f"{docker_config}:/root/.docker/config.json{volume_suffix}"
+        cmd[3:3] = ["-v", volume, "-e", "HOME=/root"]
     logging.info(f"Executing command: opm (in container) for url={url!r}, version={version}")
     result = subprocess.run(
         cmd,
