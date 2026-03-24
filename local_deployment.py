@@ -14,6 +14,7 @@ def run_local_deployment(data):
     build = data["build"]
     image = data["image"]
     normalized_url = data["normalized_url"]
+    target_path = data["install_path"]
     if data["args_upstream"]:
         upstream = True
     else:
@@ -74,4 +75,6 @@ def run_local_deployment(data):
             image = get_latest_upstream_dependency('konveyor', 'kantra', full_zip_name)
             logging.info(f"Downloading dependencies zip for upstream")
             download_file(image, full_zip_name)
-    unpack_zip(full_zip_name, get_target_dependency_path())
+    if not target_path:
+        target_path = get_target_dependency_path()
+    unpack_zip(full_zip_name, target_path)

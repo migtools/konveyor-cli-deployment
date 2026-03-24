@@ -19,6 +19,7 @@ def run_remote_deployment(data):
     ip_address = data["args_ip_address"]
     host_os = data["args_os"]
     host_platform = data["args_platform"]
+    target_path = data.get("install_path")
     full_zip_name = ""
 
     if data["args_upstream"]:
@@ -88,6 +89,8 @@ def run_remote_deployment(data):
             else:
                 full_zip_name = arg_dependency_file
 
-        unpack_zip(full_zip_name, get_target_dependency_path(client), client)
+        if not target_path:
+            target_path = get_target_dependency_path(client)
+        unpack_zip(full_zip_name, target_path, client)
     finally:
         client.close()
