@@ -335,7 +335,7 @@ def normalise_url(version, url):
         docker_config = os.path.normpath(docker_config).replace("\\", "/")
     inner_cmd = (
         'opm alpha list bundles "$OPM_URL" | grep "$OPM_VERSION" | '
-        "awk '{print $8}' | sed 's/registry.redhat.io/registry.stage.redhat.io/'"
+        "awk '{print $6}' | sed 's/registry.redhat.io/registry.stage.redhat.io/'"
     )
     cmd = [
         "podman", "run", "--rm",
