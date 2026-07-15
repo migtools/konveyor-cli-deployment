@@ -21,7 +21,7 @@ def pull_tag_images(mta_version, output_file, client=None):
     required_version_tuple = (7, 3, 0)
     current_version_tuple = tuple(map(int, mta_version.split('.')))
     if related_images:  # If related images are present then proceed
-        keywords = ['java', 'generic', 'dotnet', 'cli']
+        keywords = ['java', 'generic', 'dotnet', 'cli', 'python', 'go', 'nodejs']
         for image in related_images:
             if any(keyword in image for keyword in keywords):  # Check if the image contains any of the keywords.
                 logging.info(f"Image : {image}")
@@ -70,7 +70,7 @@ def pull_stage_ga_images(mta_version, repo, client=None):
 
 def pull_images_by_list(mta_version, image_list, client=None):
     # Keywords to filter images
-    keywords = ['java', 'generic', 'dotnet', 'cli']
+    keywords = ['java', 'generic', 'dotnet', 'cli', 'python', 'go', 'nodejs']
 
     for image in image_list:
         # Check if the image name contains any of the required keywords
