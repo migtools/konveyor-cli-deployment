@@ -45,9 +45,42 @@ def get_zip_name(version="upstream", os_name=None, machine=None):
     return zip_name
 
 
+EXECUTABLE_BINARIES = ("mta-cli", "java-external-provider")
+
+
+def _make_binaries_executable(target_path, client=None):
+    """
+    Sets the executable bit on CLI binaries after unpack on Linux/macOS,
+    but only for files that actually exist.
+    """
+    if client:
+        os_name = run_command("uname -s", client=client)[0].strip().lower()
+    else:
+        os_name, _ = get_os_platform()
+
+    if os_name not in ("linux", "darwin"):
+        return
+
+    for name in EXECUTABLE_BINARIES:
+        binary_path = os.path.join(target_path, name)
+        if client:
+            out, _ = run_command(f"test -f {binary_path} && echo exists", fail_on_failure=False, client=client)
+            exists = "exists" in out
+        else:
+            exists = os.path.exists(binary_path)
+
+        if not exists:
+            logging.warning(f"Skipping chmod, file not found: {binary_path}")
+            continue
+
+        logging.info(f"Setting executable permissions: chmod +x {binary_path}")
+        run_command(f"chmod +x {binary_path}", client=client)
+
+
 def unpack_zip(zip_file, target_path, client=None):
     """
     Unpacks a ZIP file into the specified target directory.
+    On Linux and macOS, also sets the executable bit on mta-cli and java-external-provider.
     :param zip_file: Path to the ZIP file to be unpacked.
     :param target_path: Directory where the contents of the ZIP file will be extracted.
     :param client: Paramiko SSH client (optional)
@@ -59,6 +92,7 @@ def unpack_zip(zip_file, target_path, client=None):
             try:
                 zip_ref.extractall(target_path)
                 logging.info(f"Zip {zip_file} unpacked successfully to {target_path}")
+                _make_binaries_executable(target_path)
             except Exception as err:
                 raise SystemExit("There was an issue with unpacking zip file: {}".format(err))
     else:
@@ -80,6 +114,7 @@ def unpack_zip(zip_file, target_path, client=None):
             run_command(f"unzip -o {remote_zip} -d {target_path}", client=client)
 
             logging.info(f"Zip {zip_file} unpacked successfully to {target_path} on remote host")
+            _make_binaries_executable(target_path, client=client)
 
             # Cleaning up archive
             run_command(f"rm -f {remote_zip}", client)
