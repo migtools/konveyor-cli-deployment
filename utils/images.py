@@ -6,7 +6,7 @@ import subprocess
 import yaml
 
 import config
-from utils.const import related_images, repositories, basic_images
+from utils.const import related_images, related_images_8_2, repositories, basic_images
 from utils.utils import run_command, convert_to_json
 
 
@@ -49,8 +49,10 @@ def pull_stage_ga_images(mta_version, repo, client=None):
     :return:
     """
     required_version_tuple = (7, 3, 0)
+    language_providers_version = (8, 2, 0)
     current_version_tuple = tuple(map(int, mta_version.split('.')))
-    images = basic_images + related_images
+    provider_images = related_images_8_2 if current_version_tuple >= language_providers_version else related_images
+    images = basic_images + provider_images
 
     for image in images:
         if 'dotnet' in image and current_version_tuple < required_version_tuple:

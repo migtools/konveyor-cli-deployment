@@ -38,7 +38,7 @@ def run_remote_deployment(data):
             remove_old_images(version, client=client)
             if version_tuple < (8, 1, 0):
                 if build == "stage" or build == "candidate" or build == "ga":
-                    pull_stage_ga_images(version, build, client=client)
+                    # pull_stage_ga_images(version, build, client=client)
                     full_zip_name = pull_stage_ga_dependency_file(version, build, host_os, host_platform)
                 else:
                     if not image_output_file:
