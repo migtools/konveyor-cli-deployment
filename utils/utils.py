@@ -335,7 +335,7 @@ def normalise_url(version, url):
         docker_config = os.path.normpath(docker_config).replace("\\", "/")
     inner_cmd = (
         'opm alpha list bundles "$OPM_URL" | grep "$OPM_VERSION" | '
-        "awk '{print $6}' | sed 's/registry.redhat.io/registry.stage.redhat.io/'"
+        "awk '{print $7}' | sed 's/registry.redhat.io/registry.stage.redhat.io/'"
     )
     cmd = [
         "podman", "run", "--rm",
@@ -345,6 +345,7 @@ def normalise_url(version, url):
         "quay.io/migqe/migqe-base:latest",
         "-c", inner_cmd,
     ]
+    print (cmd)
     # Mount registry auth only if present; skip mount to avoid "no such file" and
     # to allow public registries to work without any login config.
     if os.path.isfile(docker_config):
