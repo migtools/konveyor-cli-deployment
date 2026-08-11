@@ -15,7 +15,7 @@ Today this is driven by Jenkins: Mac VMs are provisioned on AWS; Windows and Lin
 
 1. Trigger when a new CLI stage build arrives (Konflux IntegrationTestScenario + `SNAPSHOT`).
 2. Provision **all** test VMs on AWS from pre-baked AMIs/snapshots (AMI baking is manual / out of scope).
-3. Generate dependency zips and image lists via `misc-downstream` (cloned beside this repo), then remote-deploy with existing Python tooling.
+3. Remote-deploy with existing Python tooling using the **same stage/`pull_stage_ga` path as local** (`--mta_version` + `--build stage`). Stage/GA zips and images are pre-published from FBC; no in-pipeline `misc-downstream` zip generation for v1.
 4. Run tier0 tests on Linux, Windows, and Darwin in parallel.
 5. Collect JUnit/HTML/logs; fail the PipelineRun if any OS fails.
 6. Destroy VMs on success; on failure keep VMs for debugging with a 24h TTL tag.
@@ -39,8 +39,8 @@ SNAPSHOT (new CLI stage / FBC build)
 └─────────┬─────────┘
           ▼
 ┌───────────────────┐
-│  prepare-artifacts│  clone konveyor-cli-deployment + misc-downstream
-│                   │  generate image list + OS zips (linux/windows/darwin)
+│  prepare-workspace│  clone konveyor-cli-deployment, write config.json,
+│                   │  derive MTA_VERSION from SNAPSHOT image
 └─────────┬─────────┘
           ├──────────────┬──────────────┐
           ▼              ▼              ▼
@@ -58,20 +58,18 @@ SNAPSHOT (new CLI stage / FBC build)
 
 1. Provision EC2 from the OS-specific AMI (AWS API credentials from a Secret).
 2. Wait until SSH is reachable.
-3. Remote deploy with existing tooling, e.g.:
+3. Remote deploy with the **existing stage path** (identical local/remote logic):
 
    ```bash
    ./install_cli.py \
      --mta_version <version> \
      --build stage \
-     --image <fbc-image-from-snapshot> \
-     --dependency_file <path-to-os-zip> \
      --os <linux|windows|darwin> \
      --platform amd64 \
      --ip_address <vm-public-ip>
    ```
 
-   Current manual example uses the FBC image tag that embeds the operator NVR, e.g. `mta-operator-container-8.1.3-202607312122.p2.gf5b3f83.assembly.stream.el9`, plus a pre-generated OS zip from `misc-downstream`.
+   Version is derived from the SNAPSHOT/FBC image tag (e.g. `mta-operator-container-8.1.3-…`). `pull_stage_ga_*` downloads the pre-published zip/images for that version — same artifacts FBC produced and uploaded in advance.
 
 4. Prepare the test host (`prepare_remote_host.py`): clone `kantra-cli-tests`, install requirements, write `.env`.
 5. Run tier0 over SSH: `cd kantra-cli-tests; pytest -s -v tests/tier0_tests.py` (overridable).
@@ -85,7 +83,7 @@ SNAPSHOT (new CLI stage / FBC build)
 | Task | Responsibility |
 |------|----------------|
 | `parse-metadata` | Resolve component container image from `SNAPSHOT` (same git-resolved task pattern as the FBC pipeline). |
-| `prepare-artifacts` | Clone this repo and `misc-downstream`; write CI `config.json`; run Konflux zip/image generation so Linux, Windows, and Darwin zips land in a shared workspace. |
+| `prepare-workspace` | Clone this repo; write CI `config.json` (ssh_user/ssh_key); derive `MTA_VERSION` from SNAPSHOT image. |
 | `linux-e2e` / `windows-e2e` / `darwin-e2e` | Provision → deploy → prepare tests → pytest tier0 → collect results → destroy or TTL-tag. |
 | `aggregate-results` | Combine per-OS `testStatus`; expose pipeline results; fail if any OS is not `PASSED`. |
 
@@ -129,12 +127,11 @@ Approach choice: **shared prepare + three explicit parallel OS tasks** (not Tekt
 
 No new remote protocol: `install_cli.py` and `prepare_remote_host.py` continue to read `ssh_user` / `ssh_key` from config.
 
-## Artifact preparation
+## Install path (stage / GA)
 
-- Clone `misc-downstream` beside `konveyor-cli-deployment` inside the task workspace (same layout as local development).
-- Generate dependency files and the list of images to pull once in `prepare-artifacts`, producing OS-specific zip paths for linux/windows/darwin.
-- Upload/use the correct zip per OS lane via `--dependency_file` (as in the existing remote deploy command).
-- Image pulls for the remote host remain the responsibility of the existing remote deployment path (Podman on the VM, etc.).
+- Do **not** diverge local vs remote deployment code for the pipeline.
+- Each OS lane calls `install_cli.py --mta_version … --build stage …`, which uses `pull_stage_ga_images` / `pull_stage_ga_dependency_file` on the remote host (same as local stage installs).
+- SNAPSHOT is used to detect that a new stage build exists and to parse the MTA version from the component image reference.
 
 ## Results & pass/fail
 
@@ -173,7 +170,7 @@ docs/superpowers/specs/
 |--------|------------------|------------------------|
 | Trigger | `SNAPSHOT` | `SNAPSHOT` |
 | Environment | Ephemeral Hypershift cluster (EAAS) | AWS EC2 from AMIs |
-| Install | Operator from FBC CatalogSource | `misc-downstream` zips + `install_cli.py` over SSH |
+| Install | Operator from FBC CatalogSource | Existing `--build stage` path (`pull_stage_ga_*`) on each VM |
 | Tests | Cypress login (UI) | `kantra-cli-tests` tier0 pytest |
 | Platforms | One cluster | Linux + Windows + Darwin in parallel |
 | Teardown | Cluster lifecycle via EAAS | Terminate on pass; TTL tag on fail |
