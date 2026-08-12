@@ -334,7 +334,7 @@ def normalise_url(version, url):
     if platform.system() == "Windows":
         docker_config = os.path.normpath(docker_config).replace("\\", "/")
     inner_cmd = (
-        'opm alpha list bundles "$OPM_URL" | grep "$OPM_VERSION" | '
+        'opm alpha list bundles "$OPM_URL" | grep -F "$OPM_VERSION" | '
         "grep -oE 'registry\.[^[:space:]]+' | sed 's/registry.redhat.io/registry.stage.redhat.io/'"
     )
     cmd = [
