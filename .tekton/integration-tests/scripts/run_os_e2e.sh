@@ -41,7 +41,9 @@ PUBLIC_IP="$PUBLIC_IP" SSH_USER="$SSH_USER" SSH_KEY="$SSH_KEY" "$SCRIPT_DIR/wait
 
 # Lane-private deploy tree — avoid parallel lanes clobbering shared config.json ssh_user.
 CLI_DEPLOY_DIR="$RESULT_DIR/cli-deploy"
-rsync -a --delete "$WORK_DIR/konveyor-cli-deployment/" "$CLI_DEPLOY_DIR/"
+rm -rf "$CLI_DEPLOY_DIR"
+mkdir -p "$CLI_DEPLOY_DIR"
+cp -a "$WORK_DIR/konveyor-cli-deployment/." "$CLI_DEPLOY_DIR/"
 export CLI_DEPLOY_DIR
 python3 - <<'PY'
 import json, os
