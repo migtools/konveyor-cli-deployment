@@ -39,11 +39,13 @@ PUBLIC_IP="$(cat "$RESULT_DIR/ec2/public-ip")"
 
 PUBLIC_IP="$PUBLIC_IP" SSH_USER="$SSH_USER" SSH_KEY="$SSH_KEY" "$SCRIPT_DIR/wait_for_ssh.sh"
 
-cd "$WORK_DIR/konveyor-cli-deployment"
-# Align shared config.json ssh_user with this lane's SSH_USER (e.g. SSH_USER_WINDOWS).
+# Lane-private deploy tree — avoid parallel lanes clobbering shared config.json ssh_user.
+CLI_DEPLOY_DIR="$RESULT_DIR/cli-deploy"
+rsync -a --delete "$WORK_DIR/konveyor-cli-deployment/" "$CLI_DEPLOY_DIR/"
+export CLI_DEPLOY_DIR
 python3 - <<'PY'
 import json, os
-path = os.path.join(os.environ["WORK_DIR"], "konveyor-cli-deployment", "config.json")
+path = os.path.join(os.environ["CLI_DEPLOY_DIR"], "config.json")
 with open(path) as f:
     cfg = json.load(f)
 cfg["ssh_user"] = os.environ["SSH_USER"]
@@ -52,6 +54,7 @@ with open(path, "w") as f:
     f.write("\n")
 PY
 
+cd "$CLI_DEPLOY_DIR"
 # Same stage flow as local/remote today: pull_stage_ga_* via --build stage
 ./install_cli.py \
   --mta_version "$MTA_VERSION" \
