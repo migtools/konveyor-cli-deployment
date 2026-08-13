@@ -1,0 +1,304 @@
+# MTA CLI E2E integration pipeline (Konflux IntegrationTestScenario).
+#
+# Required secrets in the Konflux namespace (names illustrative; override at
+# PipelineRun bind time if needed):
+#   - aws-cli-e2e-credentials: AWS API keys for EC2 provision/terminate/tag
+#       (keys: aws_access_key_id, aws_secret_access_key) — mounted in OS lanes (Task 4)
+#   - aws-vm-ssh-key: SSH private key for VM access
+#       (key: ssh-privatekey → file /secrets/aws-vm-login-key.pem)
+#
+# No MISC_DOWNSTREAM_URL param for v1 (stage/GA artifacts are pre-published).
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: mta-cli-e2e-pipeline
+spec:
+  description: |
+    Parse SNAPSHOT metadata, prepare the deploy workspace, then run tier0
+    CLI E2E on Linux, Windows, and Darwin AMI-backed VMs in parallel.
+
+  params:
+    - name: SNAPSHOT
+      description: Application Snapshot JSON from Konflux
+      type: string
+
+    - name: AMI_LINUX
+      description: AMI ID for Linux/RHEL9 E2E VM (set by IntegrationTestScenario)
+      type: string
+      default: ""
+
+    - name: AMI_WINDOWS
+      description: AMI ID for Windows E2E VM (set by IntegrationTestScenario)
+      type: string
+      default: ""
+
+    - name: AMI_MAC
+      description: AMI ID for macOS E2E VM (set by IntegrationTestScenario)
+      type: string
+      default: ""
+
+    - name: AWS_REGION
+      description: AWS region for EC2 instances
+      type: string
+      default: "us-east-1"
+
+    - name: INSTANCE_TYPE_LINUX
+      description: EC2 instance type for Linux lane
+      type: string
+      default: "t3.large"
+
+    - name: INSTANCE_TYPE_WINDOWS
+      description: EC2 instance type for Windows lane
+      type: string
+      default: "t3.large"
+
+    - name: INSTANCE_TYPE_MAC
+      description: EC2 instance type for Darwin lane
+      type: string
+      default: "mac2.metal"
+
+    - name: TEST_COMMAND
+      description: Remote pytest command on the test host
+      type: string
+      default: "pytest -s -v tests/tier0_tests.py --junitxml=junit.xml"
+
+    - name: FAILURE_TTL_HOURS
+      description: Hours to keep failed VMs tagged for debugging
+      type: string
+      default: "24"
+
+    - name: SSH_USER
+      description: Default SSH user for Linux/Darwin VMs
+      type: string
+      default: "ec2-user"
+
+    - name: SSH_USER_WINDOWS
+      description: SSH user for Windows VMs
+      type: string
+      default: "ec2-user"
+
+    - name: KEY_NAME
+      description: EC2 key pair name
+      type: string
+      default: ""
+
+    - name: SECURITY_GROUP_ID
+      description: Optional security group ID for EC2 instances
+      type: string
+      default: ""
+
+    - name: SUBNET_ID
+      description: Optional subnet ID for EC2 instances
+      type: string
+      default: ""
+
+    - name: DEPLOY_REPO_URL
+      description: Git URL of konveyor-cli-deployment (scripts + install tooling)
+      type: string
+      default: "https://github.com/migtools/konveyor-cli-deployment.git"
+
+    - name: DEPLOY_REPO_REVISION
+      description: Git branch or tag to clone for deploy tooling
+      type: string
+      default: "main"
+
+  results:
+    - name: TEST_OUTPUT
+      description: Aggregate E2E summary
+      value: $(tasks.aggregate-results.results.summary)
+    - name: LINUX_STATUS
+      description: Linux lane status (PASSED|FAILED)
+      value: $(tasks.linux-e2e.results.testStatus)
+    - name: WINDOWS_STATUS
+      description: Windows lane status (PASSED|FAILED)
+      value: $(tasks.windows-e2e.results.testStatus)
+    - name: DARWIN_STATUS
+      description: Darwin lane status (PASSED|FAILED)
+      value: $(tasks.darwin-e2e.results.testStatus)
+
+  workspaces:
+    - name: shared-workspace
+      description: Shared workspace for cloned deploy tree and artifacts
+
+  tasks:
+    - name: parse-metadata
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/konflux-ci/integration-examples
+          - name: revision
+            value: a1a70b0a1cfc96f5216d472fbd60f6b42780b3e5
+          - name: pathInRepo
+            value: tasks/test_metadata.yaml
+
+    - name: prepare-workspace
+      runAfter:
+        - parse-metadata
+      params:
+        - name: fbcImage
+          value: $(tasks.parse-metadata.results.component-container-image)
+        - name: sshUser
+          value: $(params.SSH_USER)
+        - name: deployRepoUrl
+          value: $(params.DEPLOY_REPO_URL)
+        - name: deployRepoRevision
+          value: $(params.DEPLOY_REPO_REVISION)
+      workspaces:
+        - name: shared-workspace
+          workspace: shared-workspace
+      taskSpec:
+        params:
+          - name: fbcImage
+          - name: sshUser
+          - name: deployRepoUrl
+          - name: deployRepoRevision
+        results:
+          - name: prepareStatus
+            description: Workspace preparation status (PASSED|FAILED)
+        workspaces:
+          - name: shared-workspace
+            mountPath: /workspace
+        volumes:
+          # Secret: aws-vm-ssh-key (key ssh-privatekey)
+          - name: aws-vm-ssh-key
+            secret:
+              secretName: aws-vm-ssh-key
+              items:
+                - key: ssh-privatekey
+                  path: aws-vm-login-key.pem
+                  mode: 0400
+        steps:
+          - name: prepare
+            image: registry.access.redhat.com/ubi9/python-311:1-77.1726696540
+            volumeMounts:
+              - name: aws-vm-ssh-key
+                mountPath: /secrets
+                readOnly: true
+            env:
+              - name: FBC_IMAGE
+                value: $(params.fbcImage)
+              - name: SSH_USER
+                value: $(params.sshUser)
+              - name: DEPLOY_REPO_URL
+                value: $(params.deployRepoUrl)
+              - name: DEPLOY_REPO_REVISION
+                value: $(params.deployRepoRevision)
+              - name: WORK_DIR
+                value: /workspace
+              - name: SSH_KEY
+                value: /secrets/aws-vm-login-key.pem
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+              trap 'echo -n FAILED > "$(results.prepareStatus.path)"' ERR
+
+              # Bootstrap-clone so prepare_workspace.sh / extract_version helpers exist,
+              # then let prepare_workspace.sh clone into WORK_DIR and write config.
+              BOOT="/tmp/cli-deploy-bootstrap"
+              rm -rf "$BOOT"
+              git clone --depth 1 --branch "$DEPLOY_REPO_REVISION" "$DEPLOY_REPO_URL" "$BOOT"
+
+              "$BOOT/.tekton/integration-tests/scripts/prepare_workspace.sh"
+
+              echo -n PASSED > "$(results.prepareStatus.path)"
+
+    # OS lanes stubbed for structure; real EC2/deploy wiring is Task 4.
+    - name: linux-e2e
+      runAfter:
+        - prepare-workspace
+      workspaces:
+        - name: shared-workspace
+          workspace: shared-workspace
+      taskSpec:
+        results:
+          - name: testStatus
+            description: Linux E2E status (PASSED|FAILED)
+        workspaces:
+          - name: shared-workspace
+            mountPath: /workspace
+        steps:
+          - name: stub
+            image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+              echo -n PASSED > "$(results.testStatus.path)"
+
+    - name: windows-e2e
+      runAfter:
+        - prepare-workspace
+      workspaces:
+        - name: shared-workspace
+          workspace: shared-workspace
+      taskSpec:
+        results:
+          - name: testStatus
+            description: Windows E2E status (PASSED|FAILED)
+        workspaces:
+          - name: shared-workspace
+            mountPath: /workspace
+        steps:
+          - name: stub
+            image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+              echo -n PASSED > "$(results.testStatus.path)"
+
+    - name: darwin-e2e
+      runAfter:
+        - prepare-workspace
+      workspaces:
+        - name: shared-workspace
+          workspace: shared-workspace
+      taskSpec:
+        results:
+          - name: testStatus
+            description: Darwin E2E status (PASSED|FAILED)
+        workspaces:
+          - name: shared-workspace
+            mountPath: /workspace
+        steps:
+          - name: stub
+            image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+              echo -n PASSED > "$(results.testStatus.path)"
+
+    - name: aggregate-results
+      runAfter:
+        - linux-e2e
+        - windows-e2e
+        - darwin-e2e
+      params:
+        - name: linuxStatus
+          value: $(tasks.linux-e2e.results.testStatus)
+        - name: windowsStatus
+          value: $(tasks.windows-e2e.results.testStatus)
+        - name: darwinStatus
+          value: $(tasks.darwin-e2e.results.testStatus)
+      taskSpec:
+        params:
+          - name: linuxStatus
+          - name: windowsStatus
+          - name: darwinStatus
+        results:
+          - name: summary
+            description: Aggregate OS lane summary
+        steps:
+          - name: stub
+            image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+              {
+                echo "linux=$(params.linuxStatus)"
+                echo "windows=$(params.windowsStatus)"
+                echo "darwin=$(params.darwinStatus)"
+              } > "$(results.summary.path)"
+              echo -n PASSED >> "$(results.summary.path)"
