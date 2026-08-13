@@ -8,8 +8,18 @@ FAILURE_TTL_HOURS="${FAILURE_TTL_HOURS:-24}"
 PLATFORM="${PLATFORM:-amd64}"
 OUTCOME="FAILED"
 INSTANCE_ID=""
+PUBLIC_IP=""
 
 cleanup() {
+  # Best-effort report collection (even when pytest failed). Do not change OUTCOME on scp failure.
+  if [[ -n "${PUBLIC_IP}" && -n "${SSH_USER}" && -n "${SSH_KEY}" ]]; then
+    mkdir -p "$RESULT_DIR/reports"
+    scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY" -r \
+      "${SSH_USER}@${PUBLIC_IP}:kantra-cli-tests/junit.xml" \
+      "${SSH_USER}@${PUBLIC_IP}:kantra-cli-tests/htmlcov" \
+      "$RESULT_DIR/reports/" \
+      || echo "warn: report scp failed" >&2
+  fi
   if [[ -n "${INSTANCE_ID}" ]]; then
     OUTCOME="$OUTCOME" INSTANCE_ID="$INSTANCE_ID" AWS_REGION="$AWS_REGION" \
       FAILURE_TTL_HOURS="$FAILURE_TTL_HOURS" PIPELINE_RUN_NAME="${PIPELINE_RUN_NAME:-unknown}" \
@@ -30,6 +40,18 @@ PUBLIC_IP="$(cat "$RESULT_DIR/ec2/public-ip")"
 PUBLIC_IP="$PUBLIC_IP" SSH_USER="$SSH_USER" SSH_KEY="$SSH_KEY" "$SCRIPT_DIR/wait_for_ssh.sh"
 
 cd "$WORK_DIR/konveyor-cli-deployment"
+# Align shared config.json ssh_user with this lane's SSH_USER (e.g. SSH_USER_WINDOWS).
+python3 - <<'PY'
+import json, os
+path = os.path.join(os.environ["WORK_DIR"], "konveyor-cli-deployment", "config.json")
+with open(path) as f:
+    cfg = json.load(f)
+cfg["ssh_user"] = os.environ["SSH_USER"]
+with open(path, "w") as f:
+    json.dump(cfg, f, indent=2)
+    f.write("\n")
+PY
+
 # Same stage flow as local/remote today: pull_stage_ga_* via --build stage
 ./install_cli.py \
   --mta_version "$MTA_VERSION" \
@@ -43,10 +65,5 @@ cd "$WORK_DIR/konveyor-cli-deployment"
 # shellcheck disable=SC2086
 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY" \
   "${SSH_USER}@${PUBLIC_IP}" "cd kantra-cli-tests && ${TEST_COMMAND}"
-
-scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY" -r \
-  "${SSH_USER}@${PUBLIC_IP}:kantra-cli-tests/junit.xml" \
-  "${SSH_USER}@${PUBLIC_IP}:kantra-cli-tests/htmlcov" \
-  "$RESULT_DIR/reports/" 2>/dev/null || true
 
 OUTCOME="PASSED"

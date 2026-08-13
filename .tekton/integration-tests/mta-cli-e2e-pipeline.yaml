@@ -57,6 +57,21 @@ spec:
       type: string
       default: "mac2.metal"
 
+    - name: PLATFORM_LINUX
+      description: CLI binary platform for Linux lane (amd64/arm64)
+      type: string
+      default: "amd64"
+
+    - name: PLATFORM_WINDOWS
+      description: CLI binary platform for Windows lane (amd64/arm64)
+      type: string
+      default: "amd64"
+
+    - name: PLATFORM_MAC
+      description: CLI binary platform for Darwin lane (amd64/arm64); mac2.metal is arm64
+      type: string
+      default: "arm64"
+
     - name: TEST_COMMAND
       description: Remote pytest command on the test host
       type: string
@@ -220,6 +235,8 @@ spec:
           value: $(params.INSTANCE_TYPE_LINUX)
         - name: sshUser
           value: $(params.SSH_USER)
+        - name: platform
+          value: $(params.PLATFORM_LINUX)
         - name: awsRegion
           value: $(params.AWS_REGION)
         - name: keyName
@@ -240,6 +257,7 @@ spec:
           - name: ami
           - name: instanceType
           - name: sshUser
+          - name: platform
           - name: awsRegion
           - name: keyName
           - name: securityGroupId
@@ -301,6 +319,7 @@ spec:
               export AMI_ID="$(params.ami)"
               export INSTANCE_TYPE="$(params.instanceType)"
               export SSH_USER="$(params.sshUser)"
+              export PLATFORM="$(params.platform)"
               export SSH_KEY=/secrets/aws-vm-login-key.pem
               # Coupled to prepare-workspace artifact (not a separate pipeline param).
               export MTA_VERSION="$(cat /workspace/artifacts/mta-version)"
@@ -330,6 +349,8 @@ spec:
           value: $(params.INSTANCE_TYPE_WINDOWS)
         - name: sshUser
           value: $(params.SSH_USER_WINDOWS)
+        - name: platform
+          value: $(params.PLATFORM_WINDOWS)
         - name: awsRegion
           value: $(params.AWS_REGION)
         - name: keyName
@@ -350,6 +371,7 @@ spec:
           - name: ami
           - name: instanceType
           - name: sshUser
+          - name: platform
           - name: awsRegion
           - name: keyName
           - name: securityGroupId
@@ -411,6 +433,7 @@ spec:
               export AMI_ID="$(params.ami)"
               export INSTANCE_TYPE="$(params.instanceType)"
               export SSH_USER="$(params.sshUser)"
+              export PLATFORM="$(params.platform)"
               export SSH_KEY=/secrets/aws-vm-login-key.pem
               # Coupled to prepare-workspace artifact (not a separate pipeline param).
               export MTA_VERSION="$(cat /workspace/artifacts/mta-version)"
@@ -440,6 +463,8 @@ spec:
           value: $(params.INSTANCE_TYPE_MAC)
         - name: sshUser
           value: $(params.SSH_USER)
+        - name: platform
+          value: $(params.PLATFORM_MAC)
         - name: awsRegion
           value: $(params.AWS_REGION)
         - name: keyName
@@ -460,6 +485,7 @@ spec:
           - name: ami
           - name: instanceType
           - name: sshUser
+          - name: platform
           - name: awsRegion
           - name: keyName
           - name: securityGroupId
@@ -521,6 +547,7 @@ spec:
               export AMI_ID="$(params.ami)"
               export INSTANCE_TYPE="$(params.instanceType)"
               export SSH_USER="$(params.sshUser)"
+              export PLATFORM="$(params.platform)"
               export SSH_KEY=/secrets/aws-vm-login-key.pem
               # Coupled to prepare-workspace artifact (not a separate pipeline param).
               export MTA_VERSION="$(cat /workspace/artifacts/mta-version)"

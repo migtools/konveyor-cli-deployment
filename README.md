@@ -160,6 +160,16 @@ Register it via a Konflux `IntegrationTestScenario` against stage CLI builds.
 | `SECURITY_GROUP_ID` | Security group for EC2 instances (usually required) |
 | `SUBNET_ID` | Subnet for EC2 instances (usually required) |
 
+### Optional platform params (CLI binary arch)
+
+Defaults match typical AMI arches. Override if your AMI differs (e.g. Intel Mac).
+
+| Param | Default | Purpose |
+|-------|---------|---------|
+| `PLATFORM_LINUX` | `amd64` | `--platform` for the Linux lane |
+| `PLATFORM_WINDOWS` | `amd64` | `--platform` for the Windows lane |
+| `PLATFORM_MAC` | `arm64` | `--platform` for Darwin (`mac2.metal` is arm64) |
+
 ### Install path
 
 Remote deploy uses the same flow as local/remote runs today:
