@@ -196,6 +196,9 @@ spec:
               set -euo pipefail
               trap 'echo -n FAILED > "$(results.prepareStatus.path)"' ERR
 
+              # ubi9/python-311 may not ship git; install before bootstrap clone.
+              microdnf install -y git && microdnf clean all
+
               # Bootstrap-clone so prepare_workspace.sh / extract_version helpers exist,
               # then let prepare_workspace.sh clone into WORK_DIR and write config.
               BOOT="/tmp/cli-deploy-bootstrap"
