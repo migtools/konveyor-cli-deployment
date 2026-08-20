@@ -2,6 +2,10 @@
 set -euo pipefail
 : "${AWS_REGION:?}" "${INSTANCE_ID:?}" "${OUTCOME:?}"
 FAILURE_TTL_HOURS="${FAILURE_TTL_HOURS:-24}"
+if ! [[ "$FAILURE_TTL_HOURS" =~ ^[0-9]+$ ]]; then
+  echo "warn: invalid FAILURE_TTL_HOURS='$FAILURE_TTL_HOURS'; using 24" >&2
+  FAILURE_TTL_HOURS=24
+fi
 PIPELINE_RUN_NAME="${PIPELINE_RUN_NAME:-unknown}"
 
 if [[ "$OUTCOME" == "PASSED" ]]; then

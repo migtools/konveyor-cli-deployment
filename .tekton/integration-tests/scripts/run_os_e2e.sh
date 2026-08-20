@@ -9,12 +9,21 @@ PLATFORM="${PLATFORM:-amd64}"
 OUTCOME="FAILED"
 INSTANCE_ID=""
 PUBLIC_IP=""
+KNOWN_HOSTS="$RESULT_DIR/known_hosts"
+SSH_OPTS=(-o "UserKnownHostsFile=${KNOWN_HOSTS}" -o StrictHostKeyChecking=yes -i "$SSH_KEY")
 
 cleanup() {
+  # Recover ids written by provision_ec2.sh even if that script failed mid-way.
+  if [[ -z "${INSTANCE_ID}" && -s "$RESULT_DIR/ec2/instance-id" ]]; then
+    INSTANCE_ID="$(cat "$RESULT_DIR/ec2/instance-id")"
+  fi
+  if [[ -z "${PUBLIC_IP}" && -s "$RESULT_DIR/ec2/public-ip" ]]; then
+    PUBLIC_IP="$(cat "$RESULT_DIR/ec2/public-ip")"
+  fi
   # Best-effort report collection (even when pytest failed). Do not change OUTCOME on scp failure.
-  if [[ -n "${PUBLIC_IP}" && -n "${SSH_USER}" && -n "${SSH_KEY}" ]]; then
+  if [[ -n "${PUBLIC_IP}" && -n "${SSH_USER}" && -n "${SSH_KEY}" && -s "${KNOWN_HOSTS}" ]]; then
     mkdir -p "$RESULT_DIR/reports"
-    scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY" -r \
+    scp "${SSH_OPTS[@]}" -r \
       "${SSH_USER}@${PUBLIC_IP}:kantra-cli-tests/junit.xml" \
       "${SSH_USER}@${PUBLIC_IP}:kantra-cli-tests/htmlcov" \
       "$RESULT_DIR/reports/" \
@@ -37,7 +46,9 @@ RESULT_DIR="$RESULT_DIR/ec2" AWS_REGION="$AWS_REGION" AMI_ID="$AMI_ID" INSTANCE_
 INSTANCE_ID="$(cat "$RESULT_DIR/ec2/instance-id")"
 PUBLIC_IP="$(cat "$RESULT_DIR/ec2/public-ip")"
 
-PUBLIC_IP="$PUBLIC_IP" SSH_USER="$SSH_USER" SSH_KEY="$SSH_KEY" "$SCRIPT_DIR/wait_for_ssh.sh"
+PUBLIC_IP="$PUBLIC_IP" SSH_USER="$SSH_USER" SSH_KEY="$SSH_KEY" \
+  KNOWN_HOSTS="$KNOWN_HOSTS" SSH_RETRIES="${SSH_RETRIES:-60}" SSH_RETRY_SLEEP="${SSH_RETRY_SLEEP:-10}" \
+  "$SCRIPT_DIR/wait_for_ssh.sh"
 
 # Lane-private deploy tree — avoid parallel lanes clobbering shared config.json ssh_user.
 CLI_DEPLOY_DIR="$RESULT_DIR/cli-deploy"
@@ -68,7 +79,7 @@ cd "$CLI_DEPLOY_DIR"
 ./prepare_remote_host.py --ip_address "$PUBLIC_IP" --os "$TARGET_OS"
 
 # shellcheck disable=SC2086
-ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY" \
+ssh "${SSH_OPTS[@]}" \
   "${SSH_USER}@${PUBLIC_IP}" "cd kantra-cli-tests && ${TEST_COMMAND}"
 
 OUTCOME="PASSED"

@@ -26,6 +26,10 @@ aws ec2 wait instance-running --region "$AWS_REGION" --instance-ids "$INSTANCE_I
 
 PUBLIC_IP="$(aws ec2 describe-instances --region "$AWS_REGION" --instance-ids "$INSTANCE_ID" \
   --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)"
+if [[ -z "$PUBLIC_IP" || "$PUBLIC_IP" == "None" ]]; then
+  echo "Instance $INSTANCE_ID has no public IP address" >&2
+  exit 1
+fi
 echo -n "$PUBLIC_IP" > "$RESULT_DIR/public-ip"
 echo "INSTANCE_ID=$INSTANCE_ID"
 echo "PUBLIC_IP=$PUBLIC_IP"

@@ -332,7 +332,7 @@ spec:
               export PIPELINE_RUN_NAME="$(context.pipelineRun.name)"
 
               # Always record status and exit 0 so sibling lanes + aggregate still run;
-              # aggregate_results.sh fails the PipelineRun if any lane is not PASSED.
+              # verify-results fails the PipelineRun if any lane is not PASSED.
               set +e
               /workspace/konveyor-cli-deployment/.tekton/integration-tests/scripts/run_os_e2e.sh
               set -e
@@ -446,7 +446,7 @@ spec:
               export PIPELINE_RUN_NAME="$(context.pipelineRun.name)"
 
               # Always record status and exit 0 so sibling lanes + aggregate still run;
-              # aggregate_results.sh fails the PipelineRun if any lane is not PASSED.
+              # verify-results fails the PipelineRun if any lane is not PASSED.
               set +e
               /workspace/konveyor-cli-deployment/.tekton/integration-tests/scripts/run_os_e2e.sh
               set -e
@@ -558,9 +558,11 @@ spec:
               export TEST_COMMAND="$(params.testCommand)"
               export FAILURE_TTL_HOURS="$(params.failureTtlHours)"
               export PIPELINE_RUN_NAME="$(context.pipelineRun.name)"
+              # mac2.metal / dedicated-host boot often exceeds the default 10-minute SSH budget.
+              export SSH_RETRIES=180
 
               # Always record status and exit 0 so sibling lanes + aggregate still run;
-              # aggregate_results.sh fails the PipelineRun if any lane is not PASSED.
+              # verify-results fails the PipelineRun if any lane is not PASSED.
               set +e
               /workspace/konveyor-cli-deployment/.tekton/integration-tests/scripts/run_os_e2e.sh
               set -e
@@ -589,17 +591,17 @@ spec:
           - name: darwinStatus
         results:
           - name: summary
-            description: Aggregate OS lane summary
+            description: Aggregate OS lane summary (JSON TEST_OUTPUT)
         workspaces:
           - name: shared-workspace
             mountPath: /workspace
         steps:
-          - name: aggregate
-            image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+          - name: emit-summary
+            image: registry.access.redhat.com/ubi9/python-311:1-77.1747633762
             script: |
               #!/bin/bash
               set -euo pipefail
-              # aggregate_results.sh cats status *files*; materialize task results.
+              # Always succeed so TEST_OUTPUT is published even when lanes failed.
               printf '%s' "$(params.linuxStatus)" > /tmp/linuxStatus
               printf '%s' "$(params.windowsStatus)" > /tmp/windowsStatus
               printf '%s' "$(params.darwinStatus)" > /tmp/darwinStatus
@@ -608,3 +610,39 @@ spec:
                 /tmp/windowsStatus \
                 /tmp/darwinStatus \
                 "$(results.summary.path)"
+              exit 0
+
+    - name: verify-results
+      runAfter:
+        - aggregate-results
+      params:
+        - name: linuxStatus
+          value: $(tasks.linux-e2e.results.testStatus)
+        - name: windowsStatus
+          value: $(tasks.windows-e2e.results.testStatus)
+        - name: darwinStatus
+          value: $(tasks.darwin-e2e.results.testStatus)
+      workspaces:
+        - name: shared-workspace
+          workspace: shared-workspace
+      taskSpec:
+        params:
+          - name: linuxStatus
+          - name: windowsStatus
+          - name: darwinStatus
+        workspaces:
+          - name: shared-workspace
+            mountPath: /workspace
+        steps:
+          - name: verify
+            image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+              printf '%s' "$(params.linuxStatus)" > /tmp/linuxStatus
+              printf '%s' "$(params.windowsStatus)" > /tmp/windowsStatus
+              printf '%s' "$(params.darwinStatus)" > /tmp/darwinStatus
+              /workspace/konveyor-cli-deployment/.tekton/integration-tests/scripts/verify_results.sh \
+                /tmp/linuxStatus \
+                /tmp/windowsStatus \
+                /tmp/darwinStatus

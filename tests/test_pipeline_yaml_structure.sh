@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-YML=".tekton/integration-tests/mta-cli-e2e-pipeline.yaml"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+YML="$ROOT/.tekton/integration-tests/mta-cli-e2e-pipeline.yaml"
 test -f "$YML"
 grep -q 'name: mta-cli-e2e-pipeline' "$YML"
 grep -q 'name: SNAPSHOT' "$YML"
@@ -10,6 +11,7 @@ grep -q 'name: linux-e2e' "$YML"
 grep -q 'name: windows-e2e' "$YML"
 grep -q 'name: darwin-e2e' "$YML"
 grep -q 'name: aggregate-results' "$YML"
+grep -q 'name: verify-results' "$YML"
 grep -q 'AMI_LINUX' "$YML"
 grep -q 'FAILURE_TTL_HOURS' "$YML"
 echo "OK"
