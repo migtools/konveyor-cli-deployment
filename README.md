@@ -135,3 +135,52 @@ You need to create a `config.json` file before running the tool. A template file
 * Refer to the [example config.json](#example-configjson) file for further customizations.
 
 For detailed documentation, see the [Konveyor project page](https://konveyor.io).
+
+## Konflux / Tekton CLI E2E
+
+The MTA CLI end-to-end integration pipeline lives at
+[`.tekton/integration-tests/mta-cli-e2e-pipeline.yaml`](.tekton/integration-tests/mta-cli-e2e-pipeline.yaml).
+Register it via a Konflux `IntegrationTestScenario` against stage CLI builds.
+
+### Required secrets (Konflux namespace)
+
+| Secret | Keys / mount |
+|--------|----------------|
+| `aws-cli-e2e-credentials` | `aws_access_key_id`, `aws_secret_access_key` — AWS API access for EC2 provision, terminate, and tagging |
+| `aws-vm-ssh-key` | `ssh-privatekey` → mounted as `/secrets/aws-vm-login-key.pem` |
+
+### Required IntegrationTestScenario params
+
+| Param | Purpose |
+|-------|---------|
+| `AMI_LINUX` | AMI ID for the Linux/RHEL9 E2E VM |
+| `AMI_WINDOWS` | AMI ID for the Windows E2E VM |
+| `AMI_MAC` | AMI ID for the macOS (Darwin) E2E VM |
+| `KEY_NAME` | EC2 key pair name associated with the SSH key above |
+| `SECURITY_GROUP_ID` | Security group for EC2 instances (usually required) |
+| `SUBNET_ID` | Subnet for EC2 instances (usually required) |
+
+### Optional platform params (CLI binary arch)
+
+Defaults match typical AMI arches. Override if your AMI differs (e.g. Intel Mac).
+
+| Param | Default | Purpose |
+|-------|---------|---------|
+| `PLATFORM_LINUX` | `amd64` | `--platform` for the Linux lane |
+| `PLATFORM_WINDOWS` | `amd64` | `--platform` for the Windows lane |
+| `PLATFORM_MAC` | `arm64` | `--platform` for Darwin (`mac2.metal` is arm64) |
+
+### Install path
+
+Remote deploy uses the same flow as local/remote runs today:
+`install_cli.py --mta_version <version> --build stage` with stage/GA artifacts
+pre-published. No `MISC_DOWNSTREAM_URL` parameter is used in v1.
+
+### Pipeline behavior
+
+- Linux, Windows, and Darwin lanes run **in parallel** on AMI-backed EC2 VMs.
+- The `PipelineRun` **fails if any OS lane fails** tier0 pytest.
+- VMs are **terminated on pass**.
+- Failed VMs are tagged `ttl-delete-after` and kept for **24 hours** (configurable via `FAILURE_TTL_HOURS`) for debugging.
+
+See the [design spec](docs/superpowers/specs/2026-08-10-mta-cli-e2e-tekton-design.md) for full architecture and scope.
