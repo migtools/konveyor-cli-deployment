@@ -73,6 +73,22 @@ Basic command to pull and configure kantra-cli-tests (https://github.com/konveyo
  ./prepare_remote_host.py --ip_address X.X.X.X
 ```
 
+### Remote Windows (OpenSSH)
+
+Remote deploy supports stock Windows 11 OpenSSH with PowerShell as the default shell.
+Pass `--os windows` (and typically `--platform amd64`):
+
+```bash
+./install_cli.py --mta_version 8.2.0 --build stage \
+  --ip_address X.X.X.X --os windows --platform amd64
+
+./prepare_remote_host.py --ip_address X.X.X.X --os windows
+```
+
+Requirements on the Windows host: OpenSSH Server, Podman, Git, and Python (for `python -m pip`).
+With `--os windows`, SSH always uses user `administrator` (config `ssh_user` is ignored for Windows).
+
+
 Important:
 
 * System variables `GIT_USERNAME` and `GIT_PASSWORD` should be present and should have respective values assigned in order to run all tests properly.
@@ -125,6 +141,7 @@ You need to create a `config.json` file before running the tool. A template file
 
 6. **`ssh_user`**
   * Username for SSH access to a remote host. It can be omitted for local deployments.
+  * Ignored when `--os windows` is set; Windows remotes always use `administrator`.
 
 7. **`ssh_key`**
   * SSH key for authentication to the remote host. It can be omitted for local deployments.
@@ -140,7 +157,13 @@ For detailed documentation, see the [Konveyor project page](https://konveyor.io)
 
 The MTA CLI end-to-end integration pipeline lives at
 [`.tekton/integration-tests/mta-cli-e2e-pipeline.yaml`](.tekton/integration-tests/mta-cli-e2e-pipeline.yaml).
-Register it via a Konflux `IntegrationTestScenario` against stage CLI builds.
+Reusable Tasks are under [`.tekton/tasks/`](.tekton/tasks/) and are pulled via
+Tekton `taskRef` git resolver (same layout as the MTA FBC E2E pipeline).
+Register the pipeline via a Konflux `IntegrationTestScenario` against stage CLI builds.
+
+**Bring-up note:** Pipeline `taskRef` revisions pin to `main`. Until these Task
+YAMLs are on `main`, point the IntegrationTestScenario (or temporarily the
+`revision` fields) at the branch that contains `.tekton/tasks/`.
 
 ### Required secrets (Konflux namespace)
 
@@ -178,8 +201,10 @@ pre-published. No `MISC_DOWNSTREAM_URL` parameter is used in v1.
 
 ### Pipeline behavior
 
+- Pre-flight `verify-image-pullable` checks the SNAPSHOT component image (result: `IMAGE_VERIFICATION`).
 - Linux, Windows, and Darwin lanes run **in parallel** on AMI-backed EC2 VMs.
-- The `PipelineRun` **fails if any OS lane fails** tier0 pytest.
+- The `PipelineRun` **fails if any OS lane fails** tier0 pytest (`verify-results`).
+- Aggregate JSON is published as `TEST_OUTPUT` even when lanes fail.
 - VMs are **terminated on pass**.
 - Failed VMs are tagged `ttl-delete-after` and kept for **24 hours** (configurable via `FAILURE_TTL_HOURS`) for debugging.
 
