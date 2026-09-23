@@ -1,0 +1,37 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: verify-results
+  annotations:
+    description: |
+      Failure gate for OS lane statuses. Exits non-zero when any lane is not PASSED.
+spec:
+  params:
+    - name: linuxStatus
+      description: Linux lane status (PASSED|FAILED)
+      type: string
+    - name: windowsStatus
+      description: Windows lane status (PASSED|FAILED)
+      type: string
+    - name: darwinStatus
+      description: Darwin lane status (PASSED|FAILED)
+      type: string
+
+  workspaces:
+    - name: shared-workspace
+      description: Shared workspace containing deploy scripts
+      mountPath: /workspace
+
+  steps:
+    - name: verify
+      image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+      script: |
+        #!/bin/bash
+        set -euo pipefail
+        printf '%s' "$(params.linuxStatus)" > /tmp/linuxStatus
+        printf '%s' "$(params.windowsStatus)" > /tmp/windowsStatus
+        printf '%s' "$(params.darwinStatus)" > /tmp/darwinStatus
+        /workspace/konveyor-cli-deployment/.tekton/integration-tests/scripts/verify_results.sh \
+          /tmp/linuxStatus \
+          /tmp/windowsStatus \
+          /tmp/darwinStatus

@@ -1,0 +1,45 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: aggregate-results
+  annotations:
+    description: |
+      Emit Konflux-compatible TEST_OUTPUT JSON from OS lane statuses.
+      Always succeeds so the pipeline result is published even when lanes failed.
+spec:
+  params:
+    - name: linuxStatus
+      description: Linux lane status (PASSED|FAILED)
+      type: string
+    - name: windowsStatus
+      description: Windows lane status (PASSED|FAILED)
+      type: string
+    - name: darwinStatus
+      description: Darwin lane status (PASSED|FAILED)
+      type: string
+
+  results:
+    - name: summary
+      description: Aggregate OS lane summary (JSON TEST_OUTPUT)
+
+  workspaces:
+    - name: shared-workspace
+      description: Shared workspace containing deploy scripts
+      mountPath: /workspace
+
+  steps:
+    - name: emit-summary
+      image: registry.access.redhat.com/ubi9/python-311:1-77.1747633762
+      script: |
+        #!/bin/bash
+        set -euo pipefail
+        # Always succeed so TEST_OUTPUT is published even when lanes failed.
+        printf '%s' "$(params.linuxStatus)" > /tmp/linuxStatus
+        printf '%s' "$(params.windowsStatus)" > /tmp/windowsStatus
+        printf '%s' "$(params.darwinStatus)" > /tmp/darwinStatus
+        /workspace/konveyor-cli-deployment/.tekton/integration-tests/scripts/aggregate_results.sh \
+          /tmp/linuxStatus \
+          /tmp/windowsStatus \
+          /tmp/darwinStatus \
+          "$(results.summary.path)"
+        exit 0

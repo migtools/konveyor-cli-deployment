@@ -1,0 +1,68 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: verify-image-pullable
+  annotations:
+    description: |
+      Pre-flight check to verify the SNAPSHOT component image is pullable
+      before provisioning EC2 VMs. Fails fast if the image is not accessible.
+spec:
+  params:
+    - name: fbcImage
+      description: Full component/FBC image reference from parse-metadata
+      type: string
+
+  results:
+    - name: imageDigest
+      description: Image digest SHA if inspection succeeded
+    - name: verificationStatus
+      description: PASSED or FAILED
+
+  steps:
+    - name: verify-image
+      image: quay.io/skopeo/stable:latest
+      script: |
+        #!/bin/bash
+        set -euo pipefail
+        trap 'echo "FAILED" > $(results.verificationStatus.path); exit 1' ERR
+
+        FBC_IMAGE="$(params.fbcImage)"
+        echo "========================================="
+        echo "Verifying image pullability"
+        echo "Image: $FBC_IMAGE"
+        echo "========================================="
+
+        if [[ "$FBC_IMAGE" == *"registry.redhat.io"* ]]; then
+          STAGE_IMAGE="${FBC_IMAGE//registry.redhat.io/registry.stage.redhat.io}"
+          echo "INFO: Rewriting registry.redhat.io → registry.stage.redhat.io"
+          echo "Original: $FBC_IMAGE"
+          echo "Stage: $STAGE_IMAGE"
+          FBC_IMAGE="$STAGE_IMAGE"
+        fi
+
+        echo ""
+        echo "Running: skopeo inspect --retry-times=3 docker://$FBC_IMAGE"
+        if INSPECT_OUTPUT=$(skopeo inspect --retry-times=3 --no-tags "docker://$FBC_IMAGE" 2>&1); then
+          echo "✓ Image is pullable"
+
+          DIGEST=$(echo "$INSPECT_OUTPUT" | grep -o '"Digest":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "unknown")
+          echo "Digest: $DIGEST"
+          echo "$DIGEST" > $(results.imageDigest.path)
+          echo "PASSED" > $(results.verificationStatus.path)
+        else
+          echo "✗ Failed to inspect image"
+          echo ""
+          echo "Error output:"
+          echo "$INSPECT_OUTPUT"
+          echo ""
+          echo "========================================="
+          echo "PRE-FLIGHT CHECK FAILED"
+          echo "The image is not pullable from the registry"
+          echo "Verify that:"
+          echo "  1. The image exists in the stage registry"
+          echo "  2. Registry credentials are configured correctly"
+          echo "  3. The image reference is correct"
+          echo "========================================="
+          echo "FAILED" > $(results.verificationStatus.path)
+          exit 1
+        fi

@@ -1,0 +1,78 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: prepare-workspace
+  annotations:
+    description: |
+      Bootstrap-clone deploy tooling, write CI config.json, and record MTA_VERSION
+      from the SNAPSHOT component image for OS lanes.
+spec:
+  params:
+    - name: fbcImage
+      description: Component/FBC image reference from parse-metadata
+      type: string
+    - name: sshUser
+      description: Default SSH user written into config.json
+      type: string
+    - name: deployRepoUrl
+      description: Git URL of konveyor-cli-deployment
+      type: string
+    - name: deployRepoRevision
+      description: Git branch or tag to clone
+      type: string
+
+  results:
+    - name: prepareStatus
+      description: Workspace preparation status (PASSED|FAILED)
+
+  workspaces:
+    - name: shared-workspace
+      description: Shared workspace for cloned deploy tree and artifacts
+      mountPath: /workspace
+
+  volumes:
+    - name: aws-vm-ssh-key
+      secret:
+        secretName: aws-vm-ssh-key
+        items:
+          - key: ssh-privatekey
+            path: aws-vm-login-key.pem
+            mode: 0400
+
+  steps:
+    - name: prepare
+      image: registry.access.redhat.com/ubi9/python-311:1-77.1726696540
+      volumeMounts:
+        - name: aws-vm-ssh-key
+          mountPath: /secrets
+          readOnly: true
+      env:
+        - name: FBC_IMAGE
+          value: $(params.fbcImage)
+        - name: SSH_USER
+          value: $(params.sshUser)
+        - name: DEPLOY_REPO_URL
+          value: $(params.deployRepoUrl)
+        - name: DEPLOY_REPO_REVISION
+          value: $(params.deployRepoRevision)
+        - name: WORK_DIR
+          value: /workspace
+        - name: SSH_KEY
+          value: /secrets/aws-vm-login-key.pem
+      script: |
+        #!/bin/bash
+        set -euo pipefail
+        trap 'echo -n FAILED > "$(results.prepareStatus.path)"' ERR
+
+        # ubi9/python-311 may not ship git; install before bootstrap clone.
+        microdnf install -y git && microdnf clean all
+
+        # Bootstrap-clone so prepare_workspace.sh / extract_version helpers exist,
+        # then let prepare_workspace.sh clone into WORK_DIR and write config.
+        BOOT="/tmp/cli-deploy-bootstrap"
+        rm -rf "$BOOT"
+        git clone --depth 1 --branch "$DEPLOY_REPO_REVISION" "$DEPLOY_REPO_URL" "$BOOT"
+
+        "$BOOT/.tekton/integration-tests/scripts/prepare_workspace.sh"
+
+        echo -n PASSED > "$(results.prepareStatus.path)"
