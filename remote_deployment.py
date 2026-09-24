@@ -5,7 +5,8 @@ import config
 from utils.images import remove_old_images, generate_images_list, pull_tag_images, pull_stage_ga_images, \
     generate_konflux_images_list, pull_images_by_list
 from utils.utils import connect_ssh, read_file, get_target_dependency_path, ensure_podman_running, \
-    pull_stage_ga_dependency_file, normalise_url, get_latest_upstream_dependency, download_file
+    pull_stage_ga_dependency_file, normalise_url, get_latest_upstream_dependency, download_file, \
+    normalize_host_os
 from utils.zip import generate_zip, get_zip_folder_name, get_zip_name, unpack_zip, generate_konflux_zip
 
 
@@ -17,7 +18,7 @@ def run_remote_deployment(data):
     image_output_file = data["args_image_output_file"]
     arg_dependency_file = data["args_dependency_file"]
     ip_address = data["args_ip_address"]
-    host_os = data["args_os"]
+    host_os = normalize_host_os(data["args_os"]) or data["args_os"]
     host_platform = data["args_platform"]
     target_path = data.get("install_path")
 
@@ -27,7 +28,7 @@ def run_remote_deployment(data):
         upstream = False
 
     try:
-        client = connect_ssh(ip_address)
+        client = connect_ssh(ip_address, host_os=host_os)
     except Exception as err:
         raise SystemExit("There was an issue connecting to remote host: {}".format(err))
 

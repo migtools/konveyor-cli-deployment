@@ -1,3 +1,4 @@
+import base64
 import logging
 import os
 import random
@@ -6,6 +7,7 @@ import shlex
 import shutil
 import string
 import json
+import subprocess
 import sys
 import time
 import urllib
@@ -17,35 +19,113 @@ import platform
 import config
 from utils.const import zip_urls
 
-# from utils.const import zip_urls
-
 # Logging configuration
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s]: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
-    handlers = [
+    handlers=[
         logging.StreamHandler(sys.stdout)  # Redirecting to stdout
     ]
 )
 
 
-import subprocess
-import logging
+WINDOWS_SSH_USER = "administrator"
+
+
+def normalize_host_os(host_os):
+    """Normalize OS aliases to linux|windows|darwin."""
+    if not host_os:
+        return ""
+    value = str(host_os).strip().lower()
+    if value in ("win", "windows", "win32", "win64"):
+        return "windows"
+    if value in ("mac", "macos", "darwin"):
+        return "darwin"
+    if value == "linux":
+        return "linux"
+    return value
+
+
+def resolve_ssh_user(host_os=None):
+    """SSH username for the remote host. Windows always uses administrator."""
+    if normalize_host_os(host_os) == "windows":
+        return WINDOWS_SSH_USER
+    return config.SSH_USER
+
+
+def is_windows_client(client):
+    return normalize_host_os(getattr(client, "host_os", "") or "") == "windows"
+
+
+def ps_quote(value):
+    """Single-quote a string for PowerShell (-LiteralPath safe)."""
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def remote_join(*parts):
+    """Join remote path segments with forward slashes (OpenSSH/SFTP friendly)."""
+    segments = []
+    for part in parts:
+        if part is None or str(part) == "":
+            continue
+        text = str(part).replace("\\", "/")
+        if not segments:
+            segments.append(text.rstrip("/"))
+        else:
+            segments.append(text.strip("/"))
+    return "/".join(segments)
+
+
+def _windows_encoded_command(ps_script):
+    encoded = base64.b64encode(ps_script.encode("utf-16le")).decode("ascii")
+    return f"powershell.exe -NoProfile -NonInteractive -EncodedCommand {encoded}"
+
+
+def detect_remote_os(client):
+    """Best-effort remote OS detection when --os was not provided."""
+    _stdin, stdout, _stderr = client.exec_command("uname -s")
+    out = stdout.read().decode(errors="replace").strip().lower()
+    if stdout.channel.recv_exit_status() == 0 and out:
+        if "linux" in out:
+            return "linux"
+        if "darwin" in out:
+            return "darwin"
+
+    probe = _windows_encoded_command(
+        "if ($env:OS -match 'Windows') { Write-Output 'windows' }"
+    )
+    _stdin, stdout, _stderr = client.exec_command(probe)
+    out = stdout.read().decode(errors="replace").strip().lower()
+    if stdout.channel.recv_exit_status() == 0 and "windows" in out:
+        return "windows"
+    return "linux"
+
+
+def set_client_host_os(client, host_os=None):
+    """Attach normalized host_os to the SSH client for later command routing."""
+    normalized = normalize_host_os(host_os)
+    if not normalized:
+        normalized = detect_remote_os(client)
+    client.host_os = normalized
+    logging.info("Remote host OS set to %s", client.host_os)
+    return client
+
 
 def run_command(command, fail_on_failure=True, client=None):
     logging.info(f"Executing command: {command}")
     try:
         if client:
-            safe_cmd = shlex.quote(command)
-            command = f"bash -lc {safe_cmd}"
-            _stdin, stdout, _stderr = client.exec_command(command)
+            if is_windows_client(client):
+                remote_command = _windows_encoded_command(command)
+            else:
+                remote_command = f"bash -lc {shlex.quote(command)}"
+            _stdin, stdout, _stderr = client.exec_command(remote_command)
 
-            out = stdout.read().decode()
-            err = _stderr.read().decode()
+            out = stdout.read().decode(errors="replace")
+            err = _stderr.read().decode(errors="replace")
             exit_status = stdout.channel.recv_exit_status()
 
-            # logging.info(f"[REMOTE] exit_code={exit_status}")
             if exit_status != 0 and fail_on_failure:
                 raise SystemExit(
                     f"Remote command failed with exit code {exit_status}\nSTDOUT:\n{out}\nSTDERR:\n{err}"
@@ -70,6 +150,48 @@ def run_command(command, fail_on_failure=True, client=None):
     except Exception as err:
         raise SystemExit(f"There was an issue running a command: {err}")
 
+
+def remote_mkdir_p(path, client):
+    if is_windows_client(client):
+        run_command(
+            f"New-Item -ItemType Directory -Force -Path {ps_quote(path)} | Out-Null",
+            client=client,
+        )
+    else:
+        run_command(f"mkdir -p {path}", client=client)
+
+
+def remote_remove_path(path, client):
+    if is_windows_client(client):
+        run_command(
+            f"if (Test-Path -LiteralPath {ps_quote(path)}) {{ "
+            f"Remove-Item -LiteralPath {ps_quote(path)} -Recurse -Force }}",
+            client=client,
+        )
+    else:
+        run_command(f"rm -rf {path}", client=client)
+
+
+def remote_clear_dir(path, client):
+    if is_windows_client(client):
+        run_command(
+            f"New-Item -ItemType Directory -Force -Path {ps_quote(path)} | Out-Null; "
+            f"Get-ChildItem -LiteralPath {ps_quote(path)} -Force | Remove-Item -Recurse -Force",
+            client=client,
+        )
+    else:
+        run_command(f"rm -rf {path}/*", client=client)
+
+
+def remote_remove_file(path, client):
+    if is_windows_client(client):
+        run_command(
+            f"if (Test-Path -LiteralPath {ps_quote(path)}) {{ "
+            f"Remove-Item -LiteralPath {ps_quote(path)} -Force }}",
+            client=client,
+        )
+    else:
+        run_command(f"rm -f {path}", client=client)
 
 
 def read_file(output_file):
@@ -106,20 +228,52 @@ def convert_to_json(file):
         raise SystemExit(f"There was an error converting string to JSON format: {err}")
 
 
-def connect_ssh(ip_address):
+def connect_ssh(ip_address, host_os=None):
     SSH_HOST = ip_address
-    SSH_USER = config.SSH_USER
+    SSH_USER = resolve_ssh_user(host_os)
     SSH_KEY = config.SSH_KEY
     client = paramiko.SSHClient()
     try:
+        if not SSH_USER:
+            raise SystemExit("ssh_user is empty in config.json")
+        if not SSH_KEY or not os.path.isfile(SSH_KEY):
+            raise SystemExit(f"ssh_key is missing or not a file: {SSH_KEY!r}")
+
         client.load_system_host_keys()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(SSH_HOST, username=SSH_USER, key_filename=SSH_KEY)
-        logging.info(f"Connected to host {ip_address}")
+        # Load the key once. Passing key_filename alone makes Paramiko try every
+        # key class on the same file; after an RSA auth rejection it can raise
+        # the misleading "expected OPENSSH key" from the Ed25519 loader.
+        pkey = paramiko.PKey.from_path(SSH_KEY)
+        # Use only the configured key. Default look_for_keys=True also tries
+        # ~/.ssh/id_* and hides "configured key rejected by server" failures.
+        logging.info(
+            "SSH connecting to %s as %s using key %s (%s)",
+            SSH_HOST,
+            SSH_USER,
+            SSH_KEY,
+            pkey.get_name(),
+        )
+        client.connect(
+            SSH_HOST,
+            username=SSH_USER,
+            pkey=pkey,
+            allow_agent=False,
+            look_for_keys=False,
+        )
+        logging.info("Connected to host %s", ip_address)
+        set_client_host_os(client, host_os)
         return client
     except Exception as err:
         client.close()
-        raise SystemExit("There was an issue connecting to host by ssh: {}".format(err))
+        raise SystemExit(
+            "There was an issue connecting to host by ssh: {}\n"
+            "Tried {}@{} with key {}.\n"
+            "Verify the same user/key work with:\n"
+            "  ssh -i {} -o IdentitiesOnly=yes {}@{}".format(
+                err, SSH_USER, SSH_HOST, SSH_KEY, SSH_KEY, SSH_USER, SSH_HOST
+            )
+        )
 
 
 def get_target_dependency_path(client=None):
@@ -128,19 +282,12 @@ def get_target_dependency_path(client=None):
     :param: client: SSH client for getting home dir from remote host
     :return: String contains folder name
     """
+    try:
+        home_dir = get_home_dir(client=client)
+    except Exception as err:
+        raise SystemExit("There was an issue getting home dir of remote host: {}".format(err))
     if client:
-        try:
-            stdin, stdout, stderr = client.exec_command('echo $HOME')
-            home_dir = stdout.read().decode().strip()
-            if not home_dir:
-                # В качестве запасного варианта используем 'pwd'
-                stdin, stdout, stderr = client.exec_command('pwd')
-                home_dir = stdout.read().decode().strip()
-        except Exception as err:
-            raise SystemExit("There was an issue getting home dir of remote host: {}".format(err))
-    else:
-        home_dir = os.path.expanduser("~")
-
+        return remote_join(home_dir, ".kantra")
     return os.path.join(home_dir, ".kantra")
 
 
@@ -259,6 +406,11 @@ def get_repo_folder_name(repo_url: str) -> str:
 
 
 def get_home_dir(client=None):
+    if not client:
+        return os.path.expanduser("~")
+    if is_windows_client(client):
+        out, _ = run_command("Write-Output $env:USERPROFILE", client=client)
+        return out.strip().replace("\\", "/")
     return run_command("echo $HOME", client=client)[0].strip()
 
 
@@ -280,17 +432,14 @@ def write_env_file(env_path, env_dict, client=None):
         # Remote write
         sftp = client.open_sftp()
         try:
-            # Ensure directory exists (optional)
-            dir_path = "/".join(env_path.split("/")[:-1])
-            try:
-                sftp.stat(dir_path)
-            except FileNotFoundError:
-                client.exec_command(f"mkdir -p {dir_path}")
+            normalized = str(env_path).replace("\\", "/")
+            dir_path = "/".join(normalized.split("/")[:-1])
+            if dir_path:
+                remote_mkdir_p(dir_path, client)
 
-            # Write file
-            with sftp.file(env_path, "w") as f:
+            with sftp.file(normalized, "w") as f:
                 f.write(content)
-            logging.info(f"✅ Remote .env file written to {env_path}")
+            logging.info(f"✅ Remote .env file written to {normalized}")
         finally:
             sftp.close()
     else:
@@ -312,7 +461,18 @@ def ensure_podman_running(client=None):
         print("Podman machine is not running. Attempting to start it...")
 
         # Step 2: try to start machine
-        run_command("podman machine start >/dev/null 2>&1 || true", fail_on_failure=False, client=client)
+        if client and is_windows_client(client):
+            run_command(
+                "try { podman machine start | Out-Null } catch { }; exit 0",
+                fail_on_failure=False,
+                client=client,
+            )
+        else:
+            run_command(
+                "podman machine start >/dev/null 2>&1 || true",
+                fail_on_failure=False,
+                client=client,
+            )
 
         # Step 3: wait for startup
         time.sleep(3)
@@ -335,7 +495,7 @@ def normalise_url(version, url):
         docker_config = os.path.normpath(docker_config).replace("\\", "/")
     inner_cmd = (
         'opm alpha list bundles "$OPM_URL" | grep -F "$OPM_VERSION" | '
-        "grep -oE 'registry\.[^[:space:]]+' | sed 's/registry.redhat.io/registry.stage.redhat.io/'"
+        r"grep -oE 'registry\.[^[:space:]]+' | sed 's/registry.redhat.io/registry.stage.redhat.io/'"
     )
     cmd = [
         "podman", "run", "--rm",
