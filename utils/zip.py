@@ -45,7 +45,7 @@ def get_zip_name(version="upstream", os_name=None, machine=None):
     return zip_name
 
 
-EXECUTABLE_BINARIES = ("mta-cli", "java-external-provider")
+EXECUTABLE_BINARIES = ("mta-cli", "kantra", "java-external-provider")
 
 
 def _make_binaries_executable(target_path, client=None):

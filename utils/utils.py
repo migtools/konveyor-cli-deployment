@@ -186,26 +186,41 @@ def create_random_folder(base_path):
 
 def get_latest_upstream_dependency(user, repo, asset_name):
     """
-    Downloads latest U/S dependency file from github
-    :param user: Owner's use
-    :param repo: Repo where file is located
-    :param asset_name:
-    :return:
-    """
-    url = f'https://api.github.com/repos/{user}/{repo}/releases'
-    response = requests.get(url)
+    Return the download URL for asset_name from the newest GitHub release that publishes it.
 
-    if response.status_code == 200:
+    Releases are walked newest-first. Drafts and releases that do not contain the asset
+    are skipped. The prerelease flag is ignored: konveyor/kantra stopped marking releases
+    as prereleases after v0.9.0-alpha.5, so filtering on that flag pinned installs to it.
+    """
+    url = f"https://api.github.com/repos/{user}/{repo}/releases"
+    page = 1
+    per_page = 100
+
+    while True:
+        response = requests.get(url, params={"per_page": per_page, "page": page}, timeout=60)
+        if response.status_code != 200:
+            logging.error(f"Error fetching releases: {response.status_code}")
+            return None
+
         releases = response.json()
+        if not releases:
+            break
+
         for release in releases:
-            # Check if the release is a pre-release (beta/alpha)
-            if release['prerelease']:
-                for asset in release['assets']:
-                    if asset['name'] == asset_name:
-                        return asset['browser_download_url']
-    else:
-        logging.error(f"Error fetching releases: {response.status_code}")
-        return None
+            if release.get("draft"):
+                continue
+            for asset in release.get("assets") or []:
+                if asset.get("name") == asset_name:
+                    tag = release.get("tag_name")
+                    logging.info(f"Selected upstream release {tag} for asset {asset_name}")
+                    return asset.get("browser_download_url")
+
+        if len(releases) < per_page:
+            break
+        page += 1
+
+    logging.error(f"No release in {user}/{repo} contains asset {asset_name}")
+    return None
 
 
 def pull_stage_ga_dependency_file(mta_version, repo, os_name=None, machine=None):
