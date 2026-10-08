@@ -35,6 +35,22 @@ grep -q 'name: verificationStatus' "$TASKS/verify-image-pullable.yaml"
 grep -q 'name: prepareStatus' "$TASKS/prepare-workspace.yaml"
 grep -q 'name: testStatus' "$TASKS/run-os-e2e.yaml"
 grep -q 'name: summary' "$TASKS/aggregate-results.yaml"
+grep -q 'name: mtaVersion' "$TASKS/prepare-workspace.yaml"
 grep -q 'sshRetries' "$TASKS/run-os-e2e.yaml"
+
+# Konflux ITS does not bind Pipeline workspaces (FBC E2E has none).
+if grep -qE '^[[:space:]]*workspaces:' "$YML"; then
+  echo "pipeline must not declare workspaces" >&2
+  exit 1
+fi
+if grep -qE '^[[:space:]]*workspaces:' "$TASKS/prepare-workspace.yaml" \
+  || grep -qE '^[[:space:]]*workspaces:' "$TASKS/run-os-e2e.yaml" \
+  || grep -qE '^[[:space:]]*workspaces:' "$TASKS/aggregate-results.yaml" \
+  || grep -qE '^[[:space:]]*workspaces:' "$TASKS/verify-results.yaml"; then
+  echo "tasks must not require Pipeline workspaces" >&2
+  exit 1
+fi
+grep -q 'emptyDir' "$TASKS/prepare-workspace.yaml"
+grep -q 'emptyDir' "$TASKS/run-os-e2e.yaml"
 
 echo "OK"

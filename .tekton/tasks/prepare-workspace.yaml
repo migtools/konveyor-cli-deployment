@@ -5,7 +5,8 @@ metadata:
   annotations:
     description: |
       Bootstrap-clone deploy tooling, write CI config.json, and record MTA_VERSION
-      from the SNAPSHOT component image for OS lanes.
+      from the SNAPSHOT component image for OS lanes. Uses Task-local emptyDir
+      (Konflux IntegrationTestScenario does not bind Pipeline workspaces).
 spec:
   params:
     - name: fbcImage
@@ -24,13 +25,12 @@ spec:
   results:
     - name: prepareStatus
       description: Workspace preparation status (PASSED|FAILED)
-
-  workspaces:
-    - name: shared-workspace
-      description: Shared workspace for cloned deploy tree and artifacts
-      mountPath: /workspace
+    - name: mtaVersion
+      description: MTA version extracted from the component image
 
   volumes:
+    - name: work
+      emptyDir: {}
     - name: aws-vm-ssh-key
       secret:
         secretName: aws-vm-ssh-key
@@ -43,6 +43,8 @@ spec:
     - name: prepare
       image: registry.access.redhat.com/ubi9/python-311:1-77.1726696540
       volumeMounts:
+        - name: work
+          mountPath: /workspace
         - name: aws-vm-ssh-key
           mountPath: /secrets
           readOnly: true
@@ -75,4 +77,5 @@ spec:
 
         "$BOOT/.tekton/integration-tests/scripts/prepare_workspace.sh"
 
+        cp /workspace/artifacts/mta-version "$(results.mtaVersion.path)"
         echo -n PASSED > "$(results.prepareStatus.path)"

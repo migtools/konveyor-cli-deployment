@@ -7,6 +7,7 @@ metadata:
       Provision an AMI-backed EC2 VM for one OS lane, deploy stage CLI, run tier0
       pytest, collect reports, and terminate or TTL-tag the instance. Always exits 0
       after writing testStatus so sibling lanes and aggregate still run.
+      Uses Task-local emptyDir (no Pipeline workspace required).
 spec:
   params:
     - name: targetOs
@@ -56,17 +57,26 @@ spec:
       description: PipelineRun name for EC2 instance tags
       type: string
       default: "unknown"
+    - name: mtaVersion
+      description: MTA version from prepare-workspace
+      type: string
+    - name: fbcImage
+      description: Component image used when preparing the lane deploy tree
+      type: string
+    - name: deployRepoUrl
+      description: Git URL of konveyor-cli-deployment
+      type: string
+    - name: deployRepoRevision
+      description: Git branch or tag to clone
+      type: string
 
   results:
     - name: testStatus
       description: Lane E2E status (PASSED|FAILED)
 
-  workspaces:
-    - name: shared-workspace
-      description: Shared workspace with prepared deploy tree and artifacts
-      mountPath: /workspace
-
   volumes:
+    - name: work
+      emptyDir: {}
     - name: aws-vm-ssh-key
       secret:
         secretName: aws-vm-ssh-key
@@ -79,6 +89,8 @@ spec:
     - name: run-e2e
       image: registry.access.redhat.com/ubi9/python-311:1-77.1726696540
       volumeMounts:
+        - name: work
+          mountPath: /workspace
         - name: aws-vm-ssh-key
           mountPath: /secrets
           readOnly: true
@@ -107,19 +119,32 @@ spec:
         # Tool bootstrap: ubi9/python-311 has python3+pip; install git,
         # openssh-clients (ssh/scp), and awscli for provision/SSH/deploy.
         microdnf install -y git openssh-clients && microdnf clean all
+
+        export WORK_DIR=/workspace
+        export FBC_IMAGE="$(params.fbcImage)"
+        export SSH_USER="$(params.sshUser)"
+        export SSH_KEY=/secrets/aws-vm-login-key.pem
+        export DEPLOY_REPO_URL="$(params.deployRepoUrl)"
+        export DEPLOY_REPO_REVISION="$(params.deployRepoRevision)"
+
+        # Each lane prepares its own emptyDir tree (no shared Pipeline workspace).
+        BOOT="/tmp/cli-deploy-bootstrap"
+        rm -rf "$BOOT"
+        git clone --depth 1 --branch "$DEPLOY_REPO_REVISION" "$DEPLOY_REPO_URL" "$BOOT"
+        "$BOOT/.tekton/integration-tests/scripts/prepare_workspace.sh"
+
+        # Prefer the version resolved in prepare-workspace (consistent across lanes).
+        export MTA_VERSION="$(params.mtaVersion)"
+        printf '%s' "$MTA_VERSION" > /workspace/artifacts/mta-version
+
         pip install --quiet 'awscli'
         pip install --quiet -r /workspace/konveyor-cli-deployment/requirements.txt
 
-        export WORK_DIR=/workspace
         export RESULT_DIR
         export TARGET_OS="$(params.targetOs)"
         export AMI_ID="$(params.ami)"
         export INSTANCE_TYPE="$(params.instanceType)"
-        export SSH_USER="$(params.sshUser)"
         export PLATFORM="$(params.platform)"
-        export SSH_KEY=/secrets/aws-vm-login-key.pem
-        # Coupled to prepare-workspace artifact (not a separate pipeline param).
-        export MTA_VERSION="$(cat /workspace/artifacts/mta-version)"
         export AWS_REGION="$(params.awsRegion)"
         export KEY_NAME="$(params.keyName)"
         export SECURITY_GROUP_ID="$(params.securityGroupId)"
