@@ -3,6 +3,10 @@
 # Thin Pipeline wiring Tasks from .tekton/tasks/ via git resolver (same shape as
 # migtools/mta-tackle2-ui mta-fbc-e2e-pipeline).
 #
+# No Pipeline workspaces: Konflux IntegrationTestScenario PipelineRuns do not
+# bind custom workspaces. Tasks use emptyDir volumes and pass mtaVersion via
+# Task results (same no-workspace pattern as the FBC E2E pipeline).
+#
 # Required secrets in the Konflux namespace (names illustrative; override at
 # PipelineRun bind time if needed):
 #   - aws-cli-e2e-credentials: AWS API keys for EC2 provision/terminate/tag
@@ -12,9 +16,9 @@
 #
 # No MISC_DOWNSTREAM_URL param for v1 (stage/GA artifacts are pre-published).
 #
-# taskRef revision: pin to main (FBC convention). Until this lands on main,
-# point the IntegrationTestScenario (or temporarily this revision field) at the
-# feature branch that contains .tekton/tasks/.
+# taskRef revision: temporarily pin to this fix branch until merge; then switch to
+# main (FBC convention). Until then, ITS must use a revision that contains
+# these Task YAMLs without Pipeline workspaces.
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
@@ -142,10 +146,6 @@ spec:
       description: Darwin lane status (PASSED|FAILED)
       value: $(tasks.darwin-e2e.results.testStatus)
 
-  workspaces:
-    - name: shared-workspace
-      description: Shared workspace for cloned deploy tree and artifacts
-
   tasks:
     - name: parse-metadata
       params:
@@ -173,7 +173,7 @@ spec:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: main
+            value: fix/cli-e2e-no-shared-workspace
           - name: pathInRepo
             value: .tekton/tasks/verify-image-pullable.yaml
 
@@ -189,16 +189,13 @@ spec:
           value: $(params.DEPLOY_REPO_URL)
         - name: deployRepoRevision
           value: $(params.DEPLOY_REPO_REVISION)
-      workspaces:
-        - name: shared-workspace
-          workspace: shared-workspace
       taskRef:
         resolver: git
         params:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: main
+            value: fix/cli-e2e-no-shared-workspace
           - name: pathInRepo
             value: .tekton/tasks/prepare-workspace.yaml
 
@@ -234,16 +231,21 @@ spec:
           value: "60"
         - name: pipelineRunName
           value: $(context.pipelineRun.name)
-      workspaces:
-        - name: shared-workspace
-          workspace: shared-workspace
+        - name: mtaVersion
+          value: $(tasks.prepare-workspace.results.mtaVersion)
+        - name: fbcImage
+          value: $(tasks.parse-metadata.results.component-container-image)
+        - name: deployRepoUrl
+          value: $(params.DEPLOY_REPO_URL)
+        - name: deployRepoRevision
+          value: $(params.DEPLOY_REPO_REVISION)
       taskRef:
         resolver: git
         params:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: main
+            value: fix/cli-e2e-no-shared-workspace
           - name: pathInRepo
             value: .tekton/tasks/run-os-e2e.yaml
 
@@ -279,16 +281,21 @@ spec:
           value: "60"
         - name: pipelineRunName
           value: $(context.pipelineRun.name)
-      workspaces:
-        - name: shared-workspace
-          workspace: shared-workspace
+        - name: mtaVersion
+          value: $(tasks.prepare-workspace.results.mtaVersion)
+        - name: fbcImage
+          value: $(tasks.parse-metadata.results.component-container-image)
+        - name: deployRepoUrl
+          value: $(params.DEPLOY_REPO_URL)
+        - name: deployRepoRevision
+          value: $(params.DEPLOY_REPO_REVISION)
       taskRef:
         resolver: git
         params:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: main
+            value: fix/cli-e2e-no-shared-workspace
           - name: pathInRepo
             value: .tekton/tasks/run-os-e2e.yaml
 
@@ -325,16 +332,21 @@ spec:
           value: "180"
         - name: pipelineRunName
           value: $(context.pipelineRun.name)
-      workspaces:
-        - name: shared-workspace
-          workspace: shared-workspace
+        - name: mtaVersion
+          value: $(tasks.prepare-workspace.results.mtaVersion)
+        - name: fbcImage
+          value: $(tasks.parse-metadata.results.component-container-image)
+        - name: deployRepoUrl
+          value: $(params.DEPLOY_REPO_URL)
+        - name: deployRepoRevision
+          value: $(params.DEPLOY_REPO_REVISION)
       taskRef:
         resolver: git
         params:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: main
+            value: fix/cli-e2e-no-shared-workspace
           - name: pathInRepo
             value: .tekton/tasks/run-os-e2e.yaml
 
@@ -350,16 +362,13 @@ spec:
           value: $(tasks.windows-e2e.results.testStatus)
         - name: darwinStatus
           value: $(tasks.darwin-e2e.results.testStatus)
-      workspaces:
-        - name: shared-workspace
-          workspace: shared-workspace
       taskRef:
         resolver: git
         params:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: main
+            value: fix/cli-e2e-no-shared-workspace
           - name: pathInRepo
             value: .tekton/tasks/aggregate-results.yaml
 
@@ -373,15 +382,12 @@ spec:
           value: $(tasks.windows-e2e.results.testStatus)
         - name: darwinStatus
           value: $(tasks.darwin-e2e.results.testStatus)
-      workspaces:
-        - name: shared-workspace
-          workspace: shared-workspace
       taskRef:
         resolver: git
         params:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: main
+            value: fix/cli-e2e-no-shared-workspace
           - name: pathInRepo
             value: .tekton/tasks/verify-results.yaml

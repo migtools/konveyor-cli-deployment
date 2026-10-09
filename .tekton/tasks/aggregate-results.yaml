@@ -6,6 +6,7 @@ metadata:
     description: |
       Emit Konflux-compatible TEST_OUTPUT JSON from OS lane statuses.
       Always succeeds so the pipeline result is published even when lanes failed.
+      No Pipeline workspace required (logic is inlined).
 spec:
   params:
     - name: linuxStatus
@@ -22,11 +23,6 @@ spec:
     - name: summary
       description: Aggregate OS lane summary (JSON TEST_OUTPUT)
 
-  workspaces:
-    - name: shared-workspace
-      description: Shared workspace containing deploy scripts
-      mountPath: /workspace
-
   steps:
     - name: emit-summary
       image: registry.access.redhat.com/ubi9/python-311:1-77.1747633762
@@ -34,12 +30,34 @@ spec:
         #!/bin/bash
         set -euo pipefail
         # Always succeed so TEST_OUTPUT is published even when lanes failed.
-        printf '%s' "$(params.linuxStatus)" > /tmp/linuxStatus
-        printf '%s' "$(params.windowsStatus)" > /tmp/windowsStatus
-        printf '%s' "$(params.darwinStatus)" > /tmp/darwinStatus
-        /workspace/konveyor-cli-deployment/.tekton/integration-tests/scripts/aggregate_results.sh \
-          /tmp/linuxStatus \
-          /tmp/windowsStatus \
-          /tmp/darwinStatus \
-          "$(results.summary.path)"
+        LINUX_STATUS="$(params.linuxStatus)"
+        WINDOWS_STATUS="$(params.windowsStatus)"
+        DARWIN_STATUS="$(params.darwinStatus)"
+        OUT="$(results.summary.path)"
+
+        python3 - "$OUT" "$LINUX_STATUS" "$WINDOWS_STATUS" "$DARWIN_STATUS" <<'PY'
+        import json
+        import sys
+        from datetime import datetime, timezone
+
+        out, linux, windows, darwin = sys.argv[1:]
+        successes = sum(1 for s in (linux, windows, darwin) if s == "PASSED")
+        failures = 3 - successes
+        payload = {
+            "result": "SUCCESS" if failures == 0 else "FAILURE",
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "successes": successes,
+            "failures": failures,
+            "warnings": 0,
+            "details": {
+                "linux": linux,
+                "windows": windows,
+                "darwin": darwin,
+            },
+        }
+        with open(out, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2)
+            fh.write("\n")
+        print(json.dumps(payload, indent=2))
+        PY
         exit 0

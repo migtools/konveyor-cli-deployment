@@ -161,9 +161,10 @@ Reusable Tasks are under [`.tekton/tasks/`](.tekton/tasks/) and are pulled via
 Tekton `taskRef` git resolver (same layout as the MTA FBC E2E pipeline).
 Register the pipeline via a Konflux `IntegrationTestScenario` against stage CLI builds.
 
-**Bring-up note:** Pipeline `taskRef` revisions pin to `main`. Until these Task
-YAMLs are on `main`, point the IntegrationTestScenario (or temporarily the
-`revision` fields) at the branch that contains `.tekton/tasks/`.
+**Bring-up note:** Pipeline `taskRef` revisions currently pin to
+`fix/cli-e2e-no-shared-workspace` so Konflux resolves Tasks without Pipeline
+workspaces before merge. After merge, switch those `revision` fields to `main`
+and point the IntegrationTestScenario at `main` as well.
 
 ### Required secrets (Konflux namespace)
 
@@ -201,6 +202,8 @@ pre-published. No `MISC_DOWNSTREAM_URL` parameter is used in v1.
 
 ### Pipeline behavior
 
+- No Pipeline workspaces are required (Konflux ITS does not bind them). Tasks use
+  Task-local `emptyDir` volumes; `mtaVersion` is passed via Task results.
 - Pre-flight `verify-image-pullable` checks the SNAPSHOT component image (result: `IMAGE_VERIFICATION`).
 - Linux, Windows, and Darwin lanes run **in parallel** on AMI-backed EC2 VMs.
 - The `PipelineRun` **fails if any OS lane fails** tier0 pytest (`verify-results`).

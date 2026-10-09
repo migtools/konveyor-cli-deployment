@@ -5,6 +5,7 @@ metadata:
   annotations:
     description: |
       Failure gate for OS lane statuses. Exits non-zero when any lane is not PASSED.
+      No Pipeline workspace required (logic is inlined).
 spec:
   params:
     - name: linuxStatus
@@ -17,21 +18,21 @@ spec:
       description: Darwin lane status (PASSED|FAILED)
       type: string
 
-  workspaces:
-    - name: shared-workspace
-      description: Shared workspace containing deploy scripts
-      mountPath: /workspace
-
   steps:
     - name: verify
       image: registry.access.redhat.com/ubi9/ubi-minimal:latest
       script: |
         #!/bin/bash
         set -euo pipefail
-        printf '%s' "$(params.linuxStatus)" > /tmp/linuxStatus
-        printf '%s' "$(params.windowsStatus)" > /tmp/windowsStatus
-        printf '%s' "$(params.darwinStatus)" > /tmp/darwinStatus
-        /workspace/konveyor-cli-deployment/.tekton/integration-tests/scripts/verify_results.sh \
-          /tmp/linuxStatus \
-          /tmp/windowsStatus \
-          /tmp/darwinStatus
+        LINUX_STATUS="$(params.linuxStatus)"
+        WINDOWS_STATUS="$(params.windowsStatus)"
+        DARWIN_STATUS="$(params.darwinStatus)"
+
+        echo "linux=$LINUX_STATUS"
+        echo "windows=$WINDOWS_STATUS"
+        echo "darwin=$DARWIN_STATUS"
+
+        if [[ "$LINUX_STATUS" != PASSED || "$WINDOWS_STATUS" != PASSED || "$DARWIN_STATUS" != PASSED ]]; then
+          echo "One or more OS lanes failed" >&2
+          exit 1
+        fi
