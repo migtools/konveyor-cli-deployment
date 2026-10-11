@@ -50,7 +50,12 @@ if grep -qE '^[[:space:]]*workspaces:' "$TASKS/prepare-workspace.yaml" \
   echo "tasks must not require Pipeline workspaces" >&2
   exit 1
 fi
-grep -q 'emptyDir' "$TASKS/prepare-workspace.yaml"
+# prepare-workspace must not mount secrets (missing secret → Pending, empty logs).
+if grep -qE 'secretName:[[:space:]]*aws-vm-ssh-key' "$TASKS/prepare-workspace.yaml"; then
+  echo "prepare-workspace must not mount aws-vm-ssh-key" >&2
+  exit 1
+fi
+grep -q 'timeout:' "$TASKS/prepare-workspace.yaml"
 grep -q 'emptyDir' "$TASKS/run-os-e2e.yaml"
 
 echo "OK"

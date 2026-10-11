@@ -4,78 +4,65 @@ metadata:
   name: prepare-workspace
   annotations:
     description: |
-      Bootstrap-clone deploy tooling, write CI config.json, and record MTA_VERSION
-      from the SNAPSHOT component image for OS lanes. Uses Task-local emptyDir
-      (Konflux IntegrationTestScenario does not bind Pipeline workspaces).
+      Extract MTA_VERSION from the SNAPSHOT component image before OS lanes start.
+      Does not mount secrets (missing aws-vm-ssh-key would leave the pod Pending
+      with empty logs). Full deploy-tree prep runs inside each OS lane.
 spec:
+  timeout: "20m"
   params:
     - name: fbcImage
       description: Component/FBC image reference from parse-metadata
-      type: string
-    - name: sshUser
-      description: Default SSH user written into config.json
       type: string
     - name: deployRepoUrl
       description: Git URL of konveyor-cli-deployment
       type: string
     - name: deployRepoRevision
-      description: Git branch or tag to clone
+      description: Git branch or tag to clone for extract helpers
       type: string
 
   results:
     - name: prepareStatus
-      description: Workspace preparation status (PASSED|FAILED)
+      description: Preparation status (PASSED|FAILED)
     - name: mtaVersion
       description: MTA version extracted from the component image
 
-  volumes:
-    - name: work
-      emptyDir: {}
-    - name: aws-vm-ssh-key
-      secret:
-        secretName: aws-vm-ssh-key
-        items:
-          - key: ssh-privatekey
-            path: aws-vm-login-key.pem
-            mode: 0400
-
   steps:
     - name: prepare
-      image: registry.access.redhat.com/ubi9/python-311:1-77.1726696540
-      volumeMounts:
-        - name: work
-          mountPath: /workspace
-        - name: aws-vm-ssh-key
-          mountPath: /secrets
-          readOnly: true
+      # Floating tag: pinned digests can vanish and leave image-pull Pending (empty logs).
+      image: registry.access.redhat.com/ubi9/python-311:latest
+      timeout: "15m"
       env:
         - name: FBC_IMAGE
           value: $(params.fbcImage)
-        - name: SSH_USER
-          value: $(params.sshUser)
         - name: DEPLOY_REPO_URL
           value: $(params.deployRepoUrl)
         - name: DEPLOY_REPO_REVISION
           value: $(params.deployRepoRevision)
-        - name: WORK_DIR
-          value: /workspace
-        - name: SSH_KEY
-          value: /secrets/aws-vm-login-key.pem
+        - name: GIT_TERMINAL_PROMPT
+          value: "0"
       script: |
         #!/bin/bash
         set -euo pipefail
+        # Log immediately so Konflux shows output even if later steps hang.
+        echo "prepare-workspace starting at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "FBC_IMAGE=${FBC_IMAGE}"
+        echo "DEPLOY_REPO_URL=${DEPLOY_REPO_URL}"
+        echo "DEPLOY_REPO_REVISION=${DEPLOY_REPO_REVISION}"
+
         trap 'echo -n FAILED > "$(results.prepareStatus.path)"' ERR
 
-        # ubi9/python-311 may not ship git; install before bootstrap clone.
+        echo "Installing git..."
         microdnf install -y git && microdnf clean all
 
-        # Bootstrap-clone so prepare_workspace.sh / extract_version helpers exist,
-        # then let prepare_workspace.sh clone into WORK_DIR and write config.
         BOOT="/tmp/cli-deploy-bootstrap"
         rm -rf "$BOOT"
+        echo "Cloning ${DEPLOY_REPO_URL}@${DEPLOY_REPO_REVISION}..."
         git clone --depth 1 --branch "$DEPLOY_REPO_REVISION" "$DEPLOY_REPO_URL" "$BOOT"
 
-        "$BOOT/.tekton/integration-tests/scripts/prepare_workspace.sh"
+        echo "Extracting MTA version from image..."
+        MTA_VERSION="$("$BOOT/.tekton/integration-tests/scripts/extract_version_from_image.sh" "$FBC_IMAGE")"
+        echo "MTA_VERSION=${MTA_VERSION}"
 
-        cp /workspace/artifacts/mta-version "$(results.mtaVersion.path)"
+        printf '%s' "$MTA_VERSION" > "$(results.mtaVersion.path)"
         echo -n PASSED > "$(results.prepareStatus.path)"
+        echo "prepare-workspace done"

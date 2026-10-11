@@ -16,9 +16,8 @@
 #
 # No MISC_DOWNSTREAM_URL param for v1 (stage/GA artifacts are pre-published).
 #
-# taskRef revision: temporarily pin to this fix branch until merge; then switch to
-# main (FBC convention). Until then, ITS must use a revision that contains
-# these Task YAMLs without Pipeline workspaces.
+# taskRef revision: temporarily pin to fix/cli-e2e-prepare-timeout until merge;
+# then switch to main (FBC convention).
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
@@ -173,7 +172,7 @@ spec:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: fix/cli-e2e-no-shared-workspace
+            value: fix/cli-e2e-prepare-timeout
           - name: pathInRepo
             value: .tekton/tasks/verify-image-pullable.yaml
 
@@ -183,8 +182,6 @@ spec:
       params:
         - name: fbcImage
           value: $(tasks.parse-metadata.results.component-container-image)
-        - name: sshUser
-          value: $(params.SSH_USER)
         - name: deployRepoUrl
           value: $(params.DEPLOY_REPO_URL)
         - name: deployRepoRevision
@@ -195,7 +192,7 @@ spec:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: fix/cli-e2e-no-shared-workspace
+            value: fix/cli-e2e-prepare-timeout
           - name: pathInRepo
             value: .tekton/tasks/prepare-workspace.yaml
 
@@ -245,7 +242,7 @@ spec:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: fix/cli-e2e-no-shared-workspace
+            value: fix/cli-e2e-prepare-timeout
           - name: pathInRepo
             value: .tekton/tasks/run-os-e2e.yaml
 
@@ -295,7 +292,7 @@ spec:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: fix/cli-e2e-no-shared-workspace
+            value: fix/cli-e2e-prepare-timeout
           - name: pathInRepo
             value: .tekton/tasks/run-os-e2e.yaml
 
@@ -346,7 +343,7 @@ spec:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: fix/cli-e2e-no-shared-workspace
+            value: fix/cli-e2e-prepare-timeout
           - name: pathInRepo
             value: .tekton/tasks/run-os-e2e.yaml
 
@@ -368,7 +365,7 @@ spec:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: fix/cli-e2e-no-shared-workspace
+            value: fix/cli-e2e-prepare-timeout
           - name: pathInRepo
             value: .tekton/tasks/aggregate-results.yaml
 
@@ -388,6 +385,6 @@ spec:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: fix/cli-e2e-no-shared-workspace
+            value: fix/cli-e2e-prepare-timeout
           - name: pathInRepo
             value: .tekton/tasks/verify-results.yaml
