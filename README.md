@@ -161,10 +161,6 @@ Reusable Tasks are under [`.tekton/tasks/`](.tekton/tasks/) and are pulled via
 Tekton `taskRef` git resolver (same layout as the MTA FBC E2E pipeline).
 Register the pipeline via a Konflux `IntegrationTestScenario` against stage CLI builds.
 
-**Bring-up note:** Pipeline `taskRef` revisions currently pin to
-`fix/cli-e2e-prepare-timeout` so Konflux resolves the latest Task fixes before
-merge. After merge, switch those `revision` fields to `main`.
-
 ### Required secrets (Konflux namespace)
 
 | Secret | Keys / mount |
