@@ -55,7 +55,12 @@ if grep -qE 'secretName:[[:space:]]*aws-vm-ssh-key' "$TASKS/prepare-workspace.ya
   echo "prepare-workspace must not mount aws-vm-ssh-key" >&2
   exit 1
 fi
-grep -q 'timeout:' "$TASKS/prepare-workspace.yaml"
+# Timeout must live on PipelineTask, not Task.spec (Konflux rejects Task.spec.timeout).
+if grep -qE '^[[:space:]]*timeout:' "$TASKS/prepare-workspace.yaml"; then
+  echo "prepare-workspace Task must not set spec.timeout" >&2
+  exit 1
+fi
+grep -qE '^[[:space:]]*timeout:[[:space:]]*"20m"' "$YML"
 grep -q 'emptyDir' "$TASKS/run-os-e2e.yaml"
 
 echo "OK"
