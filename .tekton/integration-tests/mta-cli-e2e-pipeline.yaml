@@ -178,6 +178,8 @@ spec:
     - name: prepare-workspace
       runAfter:
         - verify-image-pullable
+      # PipelineTask timeout (Task.spec.timeout is rejected by Konflux Tekton).
+      timeout: "20m"
       params:
         - name: fbcImage
           value: $(tasks.parse-metadata.results.component-container-image)

@@ -7,8 +7,9 @@ metadata:
       Extract MTA_VERSION from the SNAPSHOT component image before OS lanes start.
       Does not mount secrets (missing aws-vm-ssh-key would leave the pod Pending
       with empty logs). Full deploy-tree prep runs inside each OS lane.
+      Timeout is set on the PipelineTask (Task.spec.timeout is not supported in
+      all Konflux Tekton versions).
 spec:
-  timeout: "20m"
   params:
     - name: fbcImage
       description: Component/FBC image reference from parse-metadata
@@ -30,7 +31,6 @@ spec:
     - name: prepare
       # Floating tag: pinned digests can vanish and leave image-pull Pending (empty logs).
       image: registry.access.redhat.com/ubi9/python-311:latest
-      timeout: "15m"
       env:
         - name: FBC_IMAGE
           value: $(params.fbcImage)
