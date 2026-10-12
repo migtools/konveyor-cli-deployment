@@ -16,8 +16,7 @@
 #
 # No MISC_DOWNSTREAM_URL param for v1 (stage/GA artifacts are pre-published).
 #
-# taskRef revision: temporarily pin to fix/cli-e2e-prepare-timeout until merge;
-# then switch to main (FBC convention).
+# taskRef revision: pin to main (FBC convention).
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
@@ -172,7 +171,7 @@ spec:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: fix/cli-e2e-prepare-timeout
+            value: main
           - name: pathInRepo
             value: .tekton/tasks/verify-image-pullable.yaml
 
@@ -192,7 +191,7 @@ spec:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: fix/cli-e2e-prepare-timeout
+            value: main
           - name: pathInRepo
             value: .tekton/tasks/prepare-workspace.yaml
 
@@ -242,7 +241,7 @@ spec:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: fix/cli-e2e-prepare-timeout
+            value: main
           - name: pathInRepo
             value: .tekton/tasks/run-os-e2e.yaml
 
@@ -292,7 +291,7 @@ spec:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: fix/cli-e2e-prepare-timeout
+            value: main
           - name: pathInRepo
             value: .tekton/tasks/run-os-e2e.yaml
 
@@ -343,7 +342,7 @@ spec:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: fix/cli-e2e-prepare-timeout
+            value: main
           - name: pathInRepo
             value: .tekton/tasks/run-os-e2e.yaml
 
@@ -365,7 +364,7 @@ spec:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: fix/cli-e2e-prepare-timeout
+            value: main
           - name: pathInRepo
             value: .tekton/tasks/aggregate-results.yaml
 
@@ -385,6 +384,6 @@ spec:
           - name: url
             value: https://github.com/migtools/konveyor-cli-deployment
           - name: revision
-            value: fix/cli-e2e-prepare-timeout
+            value: main
           - name: pathInRepo
             value: .tekton/tasks/verify-results.yaml
