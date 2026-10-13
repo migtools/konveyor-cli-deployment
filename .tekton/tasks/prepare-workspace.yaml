@@ -5,10 +5,8 @@ metadata:
   annotations:
     description: |
       Extract MTA_VERSION from the SNAPSHOT component image before OS lanes start.
-      Does not mount secrets (missing aws-vm-ssh-key would leave the pod Pending
-      with empty logs). Full deploy-tree prep runs inside each OS lane.
-      Timeout is set on the PipelineTask (Task.spec.timeout is not supported in
-      all Konflux Tekton versions).
+      Supports tagged FBC refs and digest-only Konflux FBC images (via related-images).
+      Does not mount secrets. Timeout is set on the PipelineTask.
 spec:
   params:
     - name: fbcImage
@@ -29,7 +27,6 @@ spec:
 
   steps:
     - name: prepare
-      # Floating tag: pinned digests can vanish and leave image-pull Pending (empty logs).
       image: registry.access.redhat.com/ubi9/python-311:latest
       env:
         - name: FBC_IMAGE
@@ -43,7 +40,6 @@ spec:
       script: |
         #!/bin/bash
         set -euo pipefail
-        # Log immediately so Konflux shows output even if later steps hang.
         echo "prepare-workspace starting at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
         echo "FBC_IMAGE=${FBC_IMAGE}"
         echo "DEPLOY_REPO_URL=${DEPLOY_REPO_URL}"
@@ -51,8 +47,19 @@ spec:
 
         trap 'echo -n FAILED > "$(results.prepareStatus.path)"' ERR
 
-        echo "Installing git..."
-        microdnf install -y git && microdnf clean all
+        if ! command -v git >/dev/null 2>&1; then
+          echo "git missing; installing..."
+          if command -v microdnf >/dev/null 2>&1; then
+            microdnf install -y git && microdnf clean all
+          elif command -v dnf >/dev/null 2>&1; then
+            dnf install -y git && dnf clean all
+          else
+            echo "ERROR: git not found and no microdnf/dnf available" >&2
+            exit 1
+          fi
+        else
+          echo "git already present: $(command -v git)"
+        fi
 
         BOOT="/tmp/cli-deploy-bootstrap"
         rm -rf "$BOOT"
