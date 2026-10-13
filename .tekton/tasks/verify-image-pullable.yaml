@@ -42,18 +42,20 @@ spec:
 
         echo ""
         echo "Running: skopeo inspect --retry-times=3 docker://$FBC_IMAGE"
-        if INSPECT_OUTPUT=$(skopeo inspect --retry-times=3 --no-tags "docker://$FBC_IMAGE" 2>&1); then
+        # Prefer --format for digest: pretty-printed JSON breaks naive '"Digest":"..."' greps.
+        if DIGEST=$(skopeo inspect --retry-times=3 --no-tags --format '{{.Digest}}' "docker://$FBC_IMAGE" 2>/tmp/skopeo-inspect.err); then
           echo "✓ Image is pullable"
-
-          DIGEST=$(echo "$INSPECT_OUTPUT" | grep -o '"Digest":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "unknown")
+          if [[ -z "$DIGEST" ]]; then
+            DIGEST="unknown"
+          fi
           echo "Digest: $DIGEST"
-          echo "$DIGEST" > $(results.imageDigest.path)
-          echo "PASSED" > $(results.verificationStatus.path)
+          echo -n "$DIGEST" > $(results.imageDigest.path)
+          echo -n "PASSED" > $(results.verificationStatus.path)
         else
           echo "✗ Failed to inspect image"
           echo ""
           echo "Error output:"
-          echo "$INSPECT_OUTPUT"
+          cat /tmp/skopeo-inspect.err || true
           echo ""
           echo "========================================="
           echo "PRE-FLIGHT CHECK FAILED"
@@ -63,6 +65,6 @@ spec:
           echo "  2. Registry credentials are configured correctly"
           echo "  3. The image reference is correct"
           echo "========================================="
-          echo "FAILED" > $(results.verificationStatus.path)
+          echo -n "FAILED" > $(results.verificationStatus.path)
           exit 1
         fi
