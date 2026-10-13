@@ -76,5 +76,9 @@ if grep -qE 'microdnf[[:space:]]+install' "$TASKS/run-os-e2e.yaml"; then
   echo "run-os-e2e must not microdnf install (non-root, no microdnf)" >&2
   exit 1
 fi
+# OS lanes must set MTA_VERSION before prepare_workspace.sh (skip catalog extract).
+grep -q 'Using provided MTA_VERSION' "$ROOT/.tekton/integration-tests/scripts/prepare_workspace.sh"
+# Fail loud if ITS forgot AMI/KEY rather than cryptic aws/null errors.
+grep -q 'ami and keyName must be set' "$TASKS/run-os-e2e.yaml"
 
 echo "OK"

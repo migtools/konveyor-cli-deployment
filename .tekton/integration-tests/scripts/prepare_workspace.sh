@@ -10,7 +10,14 @@ cd "$WORK_DIR"
 rm -rf konveyor-cli-deployment
 git clone --depth 1 --branch "$DEPLOY_REPO_REVISION" "$DEPLOY_REPO_URL" konveyor-cli-deployment
 
-MTA_VERSION="$("$SCRIPT_DIR/extract_version_from_image.sh" "$FBC_IMAGE")"
+# OS lanes pass MTA_VERSION from the prepare-workspace Task result so we skip the
+# slow/flaky FBC catalog extract (oras related-images / rendered-catalog) here.
+if [[ -n "${MTA_VERSION:-}" ]]; then
+  echo "Using provided MTA_VERSION=${MTA_VERSION} (skipping image extract)"
+else
+  echo "Extracting MTA version from ${FBC_IMAGE}..."
+  MTA_VERSION="$("$SCRIPT_DIR/extract_version_from_image.sh" "$FBC_IMAGE")"
+fi
 echo -n "$MTA_VERSION" > "$WORK_DIR/artifacts/mta-version"
 
 # Stage/GA path does not need misc-downstream; keep placeholders so config.load still works.
