@@ -88,7 +88,7 @@ spec:
   steps:
     - name: run-e2e
       # Same base as prepare-workspace. Pinned 1-77.* tags are often GC'd
-      # (manifest unknown → ImagePullBackOff; only place-scripts logs appear).
+      # (manifest unknown -> ImagePullBackOff; only place-scripts logs appear).
       image: registry.access.redhat.com/ubi9/python-311:latest
       volumeMounts:
         - name: work
@@ -145,12 +145,8 @@ spec:
         fi
         chmod 400 "$SSH_KEY" || true
 
-        # Prefer the version resolved in prepare-workspace (skip re-extract in OS lanes).
+        # Prefer prepare-workspace result; prepare_workspace.sh skips catalog extract when set.
         export MTA_VERSION="$(params.mtaVersion)"
-        if [[ -z "$MTA_VERSION" ]]; then
-          echo "ERROR: mtaVersion param is empty (prepare-workspace result missing)" >&2
-          exit 1
-        fi
         echo "MTA_VERSION=${MTA_VERSION}"
 
         # Each lane prepares its own emptyDir tree (no shared Pipeline workspace).
@@ -159,13 +155,9 @@ spec:
         echo "Cloning ${DEPLOY_REPO_URL}@${DEPLOY_REPO_REVISION}..."
         git clone --depth 1 --branch "$DEPLOY_REPO_REVISION" "$DEPLOY_REPO_URL" "$BOOT"
         "$BOOT/.tekton/integration-tests/scripts/prepare_workspace.sh"
+        printf '%s' "$MTA_VERSION" > /workspace/artifacts/mta-version
 
         pip install --quiet 'awscli'
-        command -v aws >/dev/null 2>&1 || {
-          echo "ERROR: aws CLI not on PATH after pip install" >&2
-          exit 1
-        }
-        echo "aws already present: $(command -v aws) ($(aws --version 2>&1 | head -1))"
         pip install --quiet -r /workspace/konveyor-cli-deployment/requirements.txt
 
         export RESULT_DIR
@@ -182,21 +174,11 @@ spec:
         export SSH_RETRIES="$(params.sshRetries)"
         export PIPELINE_RUN_NAME="$(params.pipelineRunName)"
 
-        if [[ -z "$AMI_ID" || -z "$KEY_NAME" ]]; then
-          echo "ERROR: ami and keyName must be set on the IntegrationTestScenario" >&2
-          echo "ami='${AMI_ID}' keyName='${KEY_NAME}' securityGroupId='${SECURITY_GROUP_ID}' subnetId='${SUBNET_ID}'" >&2
-          exit 1
-        fi
-        echo "Lane params: os=${TARGET_OS} region=${AWS_REGION} ami=${AMI_ID} type=${INSTANCE_TYPE} key=${KEY_NAME} sg=${SECURITY_GROUP_ID:-} subnet=${SUBNET_ID:-}"
-        echo "Starting run_os_e2e.sh (provision → SSH → deploy → pytest)..."
-
         # Always record status and exit 0 so sibling lanes + aggregate still run;
         # verify-results fails the PipelineRun if any lane is not PASSED.
         set +e
         /workspace/konveyor-cli-deployment/.tekton/integration-tests/scripts/run_os_e2e.sh
-        rc=$?
         set -e
-        echo "run_os_e2e.sh exit_code=${rc}"
         cp "$RESULT_DIR/testStatus" "$(results.testStatus.path)" || write_failed
         echo "run-os-e2e done status=$(cat "$RESULT_DIR/testStatus" 2>/dev/null || echo unknown)"
         exit 0
