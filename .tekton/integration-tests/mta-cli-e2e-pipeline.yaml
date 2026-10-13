@@ -83,9 +83,9 @@ spec:
       default: "arm64"
 
     - name: TEST_COMMAND
-      description: Remote pytest command on the test host
+      description: Remote pytest command on the test host (kantra-cli-tests)
       type: string
-      default: "pytest -s -v tests/tier0_tests.py --junitxml=junit.xml"
+      default: "pytest -s -v tests/analysis/java/test_tier0.py --junitxml=junit.xml"
 
     - name: FAILURE_TTL_HOURS
       description: Hours to keep failed VMs tagged for debugging
