@@ -10,7 +10,7 @@ if [[ -z "$AMI_ID" || -z "$KEY_NAME" ]]; then
   exit 1
 fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-TEST_COMMAND="${TEST_COMMAND:-pytest -s -v tests/tier0_tests.py --junitxml=junit.xml}"
+TEST_COMMAND="${TEST_COMMAND:-pytest -s -v tests/analysis/java/test_tier0.py --junitxml=junit.xml}"
 FAILURE_TTL_HOURS="${FAILURE_TTL_HOURS:-24}"
 PLATFORM="${PLATFORM:-amd64}"
 OUTCOME="FAILED"

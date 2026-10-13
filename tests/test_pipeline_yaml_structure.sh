@@ -17,6 +17,8 @@ grep -q 'name: aggregate-results' "$YML"
 grep -q 'name: verify-results' "$YML"
 grep -q 'AMI_LINUX' "$YML"
 grep -q 'FAILURE_TTL_HOURS' "$YML"
+grep -q 'tests/analysis/java/test_tier0.py' "$YML"
+grep -q 'tests/analysis/java/test_tier0.py' "$ROOT/.tekton/integration-tests/scripts/run_os_e2e.sh"
 # AMI_*/KEY_NAME must not default to "" (hides missing ITS config until late).
 if awk '/name: AMI_LINUX/,/name: AWS_REGION/' "$YML" | grep -q 'default:'; then
   echo "AMI_LINUX must not have a default" >&2
