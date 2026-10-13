@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
-: "${WORK_DIR:?}" "${RESULT_DIR:?}" "${TARGET_OS:?}" "${AMI_ID:?}" "${INSTANCE_TYPE:?}"
-: "${AWS_REGION:?}" "${KEY_NAME:?}" "${SSH_USER:?}" "${SSH_KEY:?}" "${MTA_VERSION:?}"
+: "${WORK_DIR:?}" "${RESULT_DIR:?}" "${TARGET_OS:?}" "${INSTANCE_TYPE:?}"
+: "${AWS_REGION:?}" "${SSH_USER:?}" "${SSH_KEY:?}" "${MTA_VERSION:?}"
+AMI_ID="${AMI_ID:-}"
+KEY_NAME="${KEY_NAME:-}"
+if [[ -z "$AMI_ID" || -z "$KEY_NAME" ]]; then
+  echo "ERROR: AMI_ID and KEY_NAME must be non-empty (IntegrationTestScenario params AMI_* / KEY_NAME)" >&2
+  echo "TARGET_OS=${TARGET_OS} AMI_ID='${AMI_ID}' KEY_NAME='${KEY_NAME}'" >&2
+  exit 1
+fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TEST_COMMAND="${TEST_COMMAND:-pytest -s -v tests/tier0_tests.py --junitxml=junit.xml}"
 FAILURE_TTL_HOURS="${FAILURE_TTL_HOURS:-24}"
@@ -37,12 +44,6 @@ cleanup() {
   echo -n "$OUTCOME" > "$RESULT_DIR/testStatus"
 }
 trap cleanup EXIT
-
-if [[ -z "${AMI_ID}" || -z "${KEY_NAME}" ]]; then
-  echo "ERROR: AMI_ID and KEY_NAME must be non-empty before provision" >&2
-  echo "AMI_ID='${AMI_ID}' KEY_NAME='${KEY_NAME}' TARGET_OS='${TARGET_OS}'" >&2
-  exit 1
-fi
 
 mkdir -p "$RESULT_DIR/reports" "$RESULT_DIR/ec2"
 echo "Calling provision_ec2.sh for TARGET_OS=${TARGET_OS}..."

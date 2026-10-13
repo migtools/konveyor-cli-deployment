@@ -17,6 +17,16 @@ grep -q 'name: aggregate-results' "$YML"
 grep -q 'name: verify-results' "$YML"
 grep -q 'AMI_LINUX' "$YML"
 grep -q 'FAILURE_TTL_HOURS' "$YML"
+# AMI_*/KEY_NAME must not default to "" (hides missing ITS config until late).
+if awk '/name: AMI_LINUX/,/name: AWS_REGION/' "$YML" | grep -q 'default:'; then
+  echo "AMI_LINUX must not have a default" >&2
+  exit 1
+fi
+if awk '/name: KEY_NAME/,/name: SECURITY_GROUP_ID/' "$YML" | grep -q 'default:'; then
+  echo "KEY_NAME must not have a default" >&2
+  exit 1
+fi
+grep -q 'ami and keyName are empty' "$TASKS/run-os-e2e.yaml"
 grep -q 'IMAGE_VERIFICATION' "$YML"
 grep -q 'resolver: git' "$YML"
 grep -q '\.tekton/tasks/verify-image-pullable.yaml' "$YML"

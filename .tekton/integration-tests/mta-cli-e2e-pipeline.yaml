@@ -32,20 +32,20 @@ spec:
       description: Application Snapshot JSON from Konflux
       type: string
 
+    # Required: no defaults. Empty AMI_* previously reached run_os_e2e.sh as
+    # "AMI_ID: parameter null or not set" after a long prepare. Set these on the
+    # IntegrationTestScenario (params).
     - name: AMI_LINUX
-      description: AMI ID for Linux/RHEL9 E2E VM (set by IntegrationTestScenario)
+      description: AMI ID for Linux/RHEL9 E2E VM (required; set on IntegrationTestScenario)
       type: string
-      default: ""
 
     - name: AMI_WINDOWS
-      description: AMI ID for Windows E2E VM (set by IntegrationTestScenario)
+      description: AMI ID for Windows E2E VM (required; set on IntegrationTestScenario)
       type: string
-      default: ""
 
     - name: AMI_MAC
-      description: AMI ID for macOS E2E VM (set by IntegrationTestScenario)
+      description: AMI ID for macOS E2E VM (required; set on IntegrationTestScenario)
       type: string
-      default: ""
 
     - name: AWS_REGION
       description: AWS region for EC2 instances
@@ -103,9 +103,8 @@ spec:
       default: "administrator"
 
     - name: KEY_NAME
-      description: EC2 key pair name
+      description: EC2 key pair name matching aws-vm-ssh-key (required; set on IntegrationTestScenario)
       type: string
-      default: ""
 
     - name: SECURITY_GROUP_ID
       description: Optional security group ID for EC2 instances
