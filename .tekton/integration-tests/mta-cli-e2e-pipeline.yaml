@@ -200,6 +200,8 @@ spec:
     - name: linux-e2e
       runAfter:
         - prepare-workspace
+      # EC2 provision + SSH wait + deploy + pytest; PipelineTask timeout only.
+      timeout: "2h"
       params:
         - name: targetOs
           value: linux
@@ -250,6 +252,7 @@ spec:
     - name: windows-e2e
       runAfter:
         - prepare-workspace
+      timeout: "2h"
       params:
         - name: targetOs
           value: windows
@@ -300,6 +303,8 @@ spec:
     - name: darwin-e2e
       runAfter:
         - prepare-workspace
+      # mac2.metal dedicated-host boot can take a long time before SSH is up.
+      timeout: "3h"
       params:
         - name: targetOs
           value: darwin
