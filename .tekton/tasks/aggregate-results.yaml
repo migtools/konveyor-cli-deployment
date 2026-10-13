@@ -25,15 +25,18 @@ spec:
 
   steps:
     - name: emit-summary
-      image: registry.access.redhat.com/ubi9/python-311:1-77.1747633762
+      # Use :latest — pinned 1-77.* tags are often GC'd (ImagePullBackOff).
+      image: registry.access.redhat.com/ubi9/python-311:latest
       script: |
         #!/bin/bash
         set -euo pipefail
+        echo "aggregate-results starting at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
         # Always succeed so TEST_OUTPUT is published even when lanes failed.
         LINUX_STATUS="$(params.linuxStatus)"
         WINDOWS_STATUS="$(params.windowsStatus)"
         DARWIN_STATUS="$(params.darwinStatus)"
         OUT="$(results.summary.path)"
+        echo "linux=${LINUX_STATUS} windows=${WINDOWS_STATUS} darwin=${DARWIN_STATUS}"
 
         python3 - "$OUT" "$LINUX_STATUS" "$WINDOWS_STATUS" "$DARWIN_STATUS" <<'PY'
         import json

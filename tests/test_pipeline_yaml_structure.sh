@@ -65,6 +65,12 @@ grep -qE '^[[:space:]]*timeout:[[:space:]]*"2h"' "$YML"
 grep -q 'emptyDir' "$TASKS/run-os-e2e.yaml"
 # Pinned ubi9/python-311 patch tags are often GC'd (ImagePullBackOff).
 grep -q 'ubi9/python-311:latest' "$TASKS/run-os-e2e.yaml"
+grep -q 'ubi9/python-311:latest' "$TASKS/aggregate-results.yaml"
+grep -q 'ubi9/python-311:latest' "$TASKS/prepare-workspace.yaml"
+if grep -rE 'ubi9/python-311:[0-9]' "$TASKS" --include='*.yaml'; then
+  echo "tasks must not pin ubi9/python-311 patch tags" >&2
+  exit 1
+fi
 # Non-root image has no microdnf; git/ssh already present.
 if grep -qE 'microdnf[[:space:]]+install' "$TASKS/run-os-e2e.yaml"; then
   echo "run-os-e2e must not microdnf install (non-root, no microdnf)" >&2
