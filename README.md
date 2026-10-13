@@ -182,6 +182,31 @@ EC2 provision (`ami and keyName are empty` / `AMI_ID: parameter null or not set`
 | `SECURITY_GROUP_ID` | Security group for EC2 instances (usually required) |
 | `SUBNET_ID` | Subnet for EC2 instances (usually required) |
 
+Example values (from the Jenkins `create_vm.sh` AMI map; confirm they still exist in
+`us-east-1` before use). Set them on the IntegrationTestScenario in namespace
+`art-mta-tenant` (Konflux UI → Integration tests → params, or `oc patch`):
+
+```bash
+# Replace ITS_NAME with: oc get integrationtestscenario -n art-mta-tenant
+oc patch integrationtestscenario ITS_NAME -n art-mta-tenant --type merge -p '{
+  "spec": {
+    "params": [
+      {"name": "AMI_LINUX", "value": "ami-069b2e3360f9e8f50"},
+      {"name": "AMI_WINDOWS", "value": "ami-0cf05b9bbda99aed3"},
+      {"name": "AMI_MAC", "value": "ami-0bc51312598ad4bec"},
+      {"name": "INSTANCE_TYPE_LINUX", "value": "c6i.4xlarge"},
+      {"name": "INSTANCE_TYPE_WINDOWS", "value": "c4.xlarge"},
+      {"name": "KEY_NAME", "value": "aws-vm-login-key"},
+      {"name": "SECURITY_GROUP_ID", "value": "sg-0a3e6b53e86d0e69d"},
+      {"name": "AWS_REGION", "value": "us-east-1"}
+    ]
+  }
+}'
+```
+
+Note: `mac2.metal` still needs a dedicated host; the Darwin lane may fail until
+host allocation is added. Linux/Windows should provision with the params above.
+
 ### Optional platform params (CLI binary arch)
 
 Defaults match typical AMI arches. Override if your AMI differs (e.g. Intel Mac).
