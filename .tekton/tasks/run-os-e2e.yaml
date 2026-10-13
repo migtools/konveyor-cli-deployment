@@ -113,7 +113,7 @@ spec:
         #!/bin/bash
         set -euo pipefail
         echo "run-os-e2e starting at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-        echo "targetOs=$(params.targetOs) ami=$(params.ami) mtaVersion=$(params.mtaVersion)"
+        echo "targetOs=$(params.targetOs) ami=$(params.ami) keyName=$(params.keyName) mtaVersion=$(params.mtaVersion)"
         RESULT_DIR="/workspace/results/$(params.resultSubdir)"
         mkdir -p "$RESULT_DIR"
         write_failed() {
@@ -121,6 +121,14 @@ spec:
           cp "$RESULT_DIR/testStatus" "$(results.testStatus.path)" || true
         }
         trap 'echo "ERROR: run-os-e2e failed at line $LINENO" >&2; write_failed; exit 0' ERR
+
+        # Fail before clone/pip if ITS omitted AMI / key pair (empty string).
+        if [[ -z "$(params.ami)" || -z "$(params.keyName)" ]]; then
+          echo "ERROR: ami and keyName are empty." >&2
+          echo "Set AMI_LINUX/AMI_WINDOWS/AMI_MAC and KEY_NAME on the IntegrationTestScenario." >&2
+          echo "Got: ami='$(params.ami)' keyName='$(params.keyName)' targetOs='$(params.targetOs)'" >&2
+          exit 1
+        fi
 
         # ubi9/python-311 runs as non-root and ships without microdnf; git/ssh/scp
         # are already on PATH. Only pip-install awscli + deploy requirements.

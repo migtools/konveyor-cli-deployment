@@ -170,6 +170,9 @@ Register the pipeline via a Konflux `IntegrationTestScenario` against stage CLI 
 
 ### Required IntegrationTestScenario params
 
+These have **no pipeline defaults**. If omitted or left empty, OS lanes fail before
+EC2 provision (`ami and keyName are empty` / `AMI_ID: parameter null or not set`).
+
 | Param | Purpose |
 |-------|---------|
 | `AMI_LINUX` | AMI ID for the Linux/RHEL9 E2E VM |
