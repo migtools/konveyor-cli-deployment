@@ -38,17 +38,27 @@ cleanup() {
 }
 trap cleanup EXIT
 
+if [[ -z "${AMI_ID}" || -z "${KEY_NAME}" ]]; then
+  echo "ERROR: AMI_ID and KEY_NAME must be non-empty before provision" >&2
+  echo "AMI_ID='${AMI_ID}' KEY_NAME='${KEY_NAME}' TARGET_OS='${TARGET_OS}'" >&2
+  exit 1
+fi
+
 mkdir -p "$RESULT_DIR/reports" "$RESULT_DIR/ec2"
+echo "Calling provision_ec2.sh for TARGET_OS=${TARGET_OS}..."
 RESULT_DIR="$RESULT_DIR/ec2" AWS_REGION="$AWS_REGION" AMI_ID="$AMI_ID" INSTANCE_TYPE="$INSTANCE_TYPE" \
   KEY_NAME="$KEY_NAME" SECURITY_GROUP_ID="${SECURITY_GROUP_ID:-}" SUBNET_ID="${SUBNET_ID:-}" \
   PIPELINE_RUN_NAME="${PIPELINE_RUN_NAME:-unknown}" \
   "$SCRIPT_DIR/provision_ec2.sh"
 INSTANCE_ID="$(cat "$RESULT_DIR/ec2/instance-id")"
 PUBLIC_IP="$(cat "$RESULT_DIR/ec2/public-ip")"
+echo "Provisioned INSTANCE_ID=${INSTANCE_ID} PUBLIC_IP=${PUBLIC_IP}"
 
+echo "Waiting for SSH on ${PUBLIC_IP} as ${SSH_USER}..."
 PUBLIC_IP="$PUBLIC_IP" SSH_USER="$SSH_USER" SSH_KEY="$SSH_KEY" \
   KNOWN_HOSTS="$KNOWN_HOSTS" SSH_RETRIES="${SSH_RETRIES:-60}" SSH_RETRY_SLEEP="${SSH_RETRY_SLEEP:-10}" \
   "$SCRIPT_DIR/wait_for_ssh.sh"
+echo "SSH is up; deploying CLI and running tests..."
 
 # Lane-private deploy tree — avoid parallel lanes clobbering shared config.json ssh_user.
 CLI_DEPLOY_DIR="$RESULT_DIR/cli-deploy"
