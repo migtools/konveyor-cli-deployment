@@ -79,15 +79,16 @@ with open(path, "w") as f:
 PY
 
 cd "$CLI_DEPLOY_DIR"
+# Invoke via python3: Task image has no /usr/bin/python (ubi9/python-311).
 # Same stage flow as local/remote today: pull_stage_ga_* via --build stage
-./install_cli.py \
+python3 ./install_cli.py \
   --mta_version "$MTA_VERSION" \
   --build stage \
   --os "$TARGET_OS" \
   --platform "$PLATFORM" \
   --ip_address "$PUBLIC_IP"
 
-./prepare_remote_host.py --ip_address "$PUBLIC_IP" --os "$TARGET_OS"
+python3 ./prepare_remote_host.py --ip_address "$PUBLIC_IP" --os "$TARGET_OS"
 
 # shellcheck disable=SC2086
 ssh "${SSH_OPTS[@]}" \
