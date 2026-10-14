@@ -10,7 +10,8 @@ if [[ -z "$AMI_ID" || -z "$KEY_NAME" ]]; then
   exit 1
 fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-TEST_COMMAND="${TEST_COMMAND:-pytest -s -v tests/analysis/java/test_tier0.py --junitxml=junit.xml}"
+# Full suite by default; ART known failures appended via art_pytest_excludes.sh.
+TEST_COMMAND="${TEST_COMMAND:-pytest -s -v --junitxml=junit.xml}"
 FAILURE_TTL_HOURS="${FAILURE_TTL_HOURS:-24}"
 PLATFORM="${PLATFORM:-amd64}"
 OUTCOME="FAILED"
@@ -90,8 +91,12 @@ python3 ./install_cli.py \
 
 python3 ./prepare_remote_host.py --ip_address "$PUBLIC_IP" --os "$TARGET_OS"
 
+ART_EXCLUDES="$(TARGET_OS="$TARGET_OS" "$SCRIPT_DIR/art_pytest_excludes.sh")"
+echo "Running tests: ${TEST_COMMAND} ${ART_EXCLUDES}"
+# TEST_COMMAND is intentionally unquoted (pipeline-provided pytest argv).
+# ART_EXCLUDES is pre-quoted by art_pytest_excludes.sh (printf %q).
 # shellcheck disable=SC2086
 ssh "${SSH_OPTS[@]}" \
-  "${SSH_USER}@${PUBLIC_IP}" "cd kantra-cli-tests && ${TEST_COMMAND}"
+  "${SSH_USER}@${PUBLIC_IP}" "cd kantra-cli-tests && ${TEST_COMMAND} ${ART_EXCLUDES}"
 
 OUTCOME="PASSED"
