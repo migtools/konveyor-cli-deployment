@@ -229,9 +229,14 @@ pre-published. No `MISC_DOWNSTREAM_URL` parameter is used in v1.
   Task-local `emptyDir` volumes; `mtaVersion` is passed via Task results.
 - Pre-flight `verify-image-pullable` checks the SNAPSHOT component image (result: `IMAGE_VERIFICATION`).
 - Linux, Windows, and Darwin lanes run **in parallel** on AMI-backed EC2 VMs.
-- The `PipelineRun` **fails if any OS lane fails** tier0 pytest (`verify-results`).
+- The `PipelineRun` **fails if any OS lane fails** pytest (`verify-results`).
+- Default `TEST_COMMAND` runs the full `kantra-cli-tests` suite; ART known
+  failures are always appended (see `.tekton/integration-tests/scripts/art_pytest_excludes.sh`):
+  transform, centralconfig, Cloud Foundry, known advanced-options/proxy bugs,
+  and the dotnet hello-world test on Linux/Darwin only.
 - Aggregate JSON is published as `TEST_OUTPUT` even when lanes fail.
 - VMs are **terminated on pass**.
 - Failed VMs are tagged `ttl-delete-after` and kept for **24 hours** (configurable via `FAILURE_TTL_HOURS`) for debugging.
+  If `ec2:CreateTags` is denied, cleanup terminates the instance instead.
 
 See the [design spec](docs/superpowers/specs/2026-08-10-mta-cli-e2e-tekton-design.md) for full architecture and scope.

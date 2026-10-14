@@ -17,8 +17,24 @@ grep -q 'name: aggregate-results' "$YML"
 grep -q 'name: verify-results' "$YML"
 grep -q 'AMI_LINUX' "$YML"
 grep -q 'FAILURE_TTL_HOURS' "$YML"
-grep -q 'tests/analysis/java/test_tier0.py' "$YML"
-grep -q 'tests/analysis/java/test_tier0.py' "$ROOT/.tekton/integration-tests/scripts/run_os_e2e.sh"
+grep -q 'pytest -s -v --junitxml=junit.xml' "$YML"
+grep -q 'art_pytest_excludes.sh' "$ROOT/.tekton/integration-tests/scripts/run_os_e2e.sh"
+test -x "$ROOT/.tekton/integration-tests/scripts/art_pytest_excludes.sh"
+# Dotnet deselect is Linux/Darwin-only; Windows keeps the test.
+out_linux="$(TARGET_OS=linux "$ROOT/.tekton/integration-tests/scripts/art_pytest_excludes.sh")"
+out_win="$(TARGET_OS=windows "$ROOT/.tekton/integration-tests/scripts/art_pytest_excludes.sh")"
+[[ "$out_linux" == *test_hello_world_linux_analysis_with_rules* ]] || {
+  echo "linux excludes must deselect dotnet hello-world" >&2
+  exit 1
+}
+[[ "$out_win" != *test_hello_world_linux_analysis_with_rules* ]] || {
+  echo "windows excludes must not deselect dotnet hello-world" >&2
+  exit 1
+}
+[[ "$out_linux" == *test_transform.py* ]] || {
+  echo "excludes must ignore test_transform.py" >&2
+  exit 1
+}
 # AMI_*/KEY_NAME must not default to "" (hides missing ITS config until late).
 if awk '/name: AMI_LINUX/,/name: AWS_REGION/' "$YML" | grep -q 'default:'; then
   echo "AMI_LINUX must not have a default" >&2

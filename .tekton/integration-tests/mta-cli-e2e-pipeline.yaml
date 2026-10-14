@@ -83,9 +83,12 @@ spec:
       default: "arm64"
 
     - name: TEST_COMMAND
-      description: Remote pytest command on the test host (kantra-cli-tests)
+      description: >
+        Remote pytest command on the test host (kantra-cli-tests). ART known
+        failures are always appended by run_os_e2e.sh (transform, centralconfig,
+        CF, proxy container bugs, etc.).
       type: string
-      default: "pytest -s -v tests/analysis/java/test_tier0.py --junitxml=junit.xml"
+      default: "pytest -s -v --junitxml=junit.xml"
 
     - name: FAILURE_TTL_HOURS
       description: Hours to keep failed VMs tagged for debugging
