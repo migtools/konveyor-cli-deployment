@@ -107,6 +107,20 @@ spec:
             secretKeyRef:
               name: aws-cli-e2e-credentials
               key: aws_secret_access_key
+        # Passed into prepare_remote_host.py → remote kantra-cli-tests/.env
+        # (optional so a missing secret does not leave the Task Pending).
+        - name: GIT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: kantra-cli-git-credentials
+              key: git_username
+              optional: true
+        - name: GIT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: kantra-cli-git-credentials
+              key: git_password
+              optional: true
         - name: GIT_TERMINAL_PROMPT
           value: "0"
       script: |
@@ -114,6 +128,11 @@ spec:
         set -euo pipefail
         echo "run-os-e2e starting at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
         echo "targetOs=$(params.targetOs) ami=$(params.ami) keyName=$(params.keyName) mtaVersion=$(params.mtaVersion)"
+        if [[ -n "${GIT_USERNAME:-}" && -n "${GIT_PASSWORD:-}" ]]; then
+          echo "GIT credentials: present (username=${GIT_USERNAME})"
+        else
+          echo "WARN: GIT_USERNAME/GIT_PASSWORD not set (secret kantra-cli-git-credentials); private-repo tests may fail"
+        fi
         RESULT_DIR="/workspace/results/$(params.resultSubdir)"
         mkdir -p "$RESULT_DIR"
         write_failed() {

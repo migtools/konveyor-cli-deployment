@@ -13,6 +13,8 @@
 #       (keys: aws_access_key_id, aws_secret_access_key) — mounted in OS lanes
 #   - aws-vm-ssh-key: SSH private key for VM access
 #       (key: ssh-privatekey → file /secrets/aws-vm-login-key.pem)
+#   - kantra-cli-git-credentials: GitHub user + PAT for kantra-cli-tests .env
+#       (keys: git_username, git_password) — optional mount; needed for private-repo tests
 #
 # No MISC_DOWNSTREAM_URL param for v1 (stage/GA artifacts are pre-published).
 #
