@@ -167,6 +167,21 @@ Register the pipeline via a Konflux `IntegrationTestScenario` against stage CLI 
 |--------|----------------|
 | `aws-cli-e2e-credentials` | `aws_access_key_id`, `aws_secret_access_key` — AWS API access for EC2 provision, terminate, and tagging |
 | `aws-vm-ssh-key` | `ssh-privatekey` → mounted as `/secrets/aws-vm-login-key.pem` |
+| `kantra-cli-git-credentials` | `git_username`, `git_password` (GitHub PAT) — written into remote `kantra-cli-tests/.env` by `prepare_remote_host.py`. Optional for Task start; required for private-repo tests. |
+
+Create the Git credentials Secret (use a fine-scoped PAT, never commit it):
+
+```bash
+# Prefer reading from your local shell env, not pasting the token into history:
+read -r -p 'GitHub username: ' GIT_USERNAME
+read -r -s -p 'GitHub PAT: ' GIT_PASSWORD; echo
+oc create secret generic kantra-cli-git-credentials -n art-mta-tenant \
+  --from-literal=git_username="$GIT_USERNAME" \
+  --from-literal=git_password="$GIT_PASSWORD"
+unset GIT_USERNAME GIT_PASSWORD
+```
+
+Flow: Secret → Task env (`GIT_USERNAME` / `GIT_PASSWORD`) → `prepare_remote_host.py` → remote `.env`. Do not bake tokens into the git repo or Pipeline params.
 
 ### Required IntegrationTestScenario params
 

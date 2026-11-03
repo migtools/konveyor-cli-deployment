@@ -45,6 +45,9 @@ if awk '/name: KEY_NAME/,/name: SECURITY_GROUP_ID/' "$YML" | grep -q 'default:';
   exit 1
 fi
 grep -q 'ami and keyName are empty' "$TASKS/run-os-e2e.yaml"
+grep -q 'kantra-cli-git-credentials' "$TASKS/run-os-e2e.yaml"
+grep -q 'name: GIT_USERNAME' "$TASKS/run-os-e2e.yaml"
+grep -q 'name: GIT_PASSWORD' "$TASKS/run-os-e2e.yaml"
 grep -q 'IMAGE_VERIFICATION' "$YML"
 grep -q 'resolver: git' "$YML"
 grep -q '\.tekton/tasks/verify-image-pullable.yaml' "$YML"
