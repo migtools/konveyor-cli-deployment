@@ -207,7 +207,7 @@ oc patch integrationtestscenario ITS_NAME -n art-mta-tenant --type merge -p '{
   "spec": {
     "params": [
       {"name": "AMI_LINUX", "value": "ami-069b2e3360f9e8f50"},
-      {"name": "AMI_WINDOWS", "value": "ami-0cf05b9bbda99aed3"},
+      {"name": "AMI_WINDOWS", "value": "ami-0bb5f8331976a99ba"},
       {"name": "AMI_MAC", "value": "ami-0bc51312598ad4bec"},
       {"name": "INSTANCE_TYPE_LINUX", "value": "c6i.4xlarge"},
       {"name": "INSTANCE_TYPE_WINDOWS", "value": "c4.xlarge"},
