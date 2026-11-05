@@ -314,33 +314,61 @@ def write_env_file(env_path, env_dict, client=None):
             f.write(content)
         logging.info(f"✅ Local .env file written to {env_path}")
 
+def _podman_ready(out, err):
+    text = f"{out or ''}{err or ''}"
+    return not (
+        err
+        or "Error:" in text
+        or "Cannot connect" in text
+        or "Error:" in (out or "")
+    )
+
+
 def ensure_podman_running(client=None):
     """
     Ensures that Podman is running (either locally or remotely).
-    Tries to start the default machine if not active.
+    Inits the default machine if missing, then starts it and waits.
+    On Windows EC2 this requires NestedVirtualization (WSL2/Hyper-V).
     """
     print("Checking Podman status...")
 
-    # Step 1: check if podman responds
     out, err = run_command("podman images", fail_on_failure=False, client=client)
-    if err or "Error:" in out or "Cannot connect" in out:
-        print("Podman machine is not running. Attempting to start it...")
-
-        # Step 2: try to start machine
-        run_command("podman machine start >/dev/null 2>&1 || true", fail_on_failure=False, client=client)
-
-        # Step 3: wait for startup
-        time.sleep(3)
-
-        # Step 4: recheck status
-        out2, err2 = run_command("podman images", fail_on_failure=False, client=client)
-        if err2 or "Error:" in out2 or "Cannot connect" in out2:
-            print("❌ Failed to start Podman machine.")
-            raise SystemExit(1)
-        else:
-            print("Podman machine started successfully.")
-    else:
+    if _podman_ready(out, err):
         print("Podman is already running.")
+        return
+
+    print("Podman is not ready. Ensuring default machine exists, then starting it...")
+    # Create default machine if none exists (idempotent-ish).
+    run_command(
+        "podman machine inspect podman-machine-default >/dev/null 2>&1 || "
+        "podman machine init --cpus 2 --memory 4096 --disk-size 60",
+        fail_on_failure=False,
+        client=client,
+    )
+    start_out, start_err = run_command(
+        "podman machine start",
+        fail_on_failure=False,
+        client=client,
+    )
+    print(f"podman machine start stdout:\n{start_out}")
+    print(f"podman machine start stderr:\n{start_err}")
+
+    # WSL2/Hyper-V boot can take well over a few seconds on a fresh VM.
+    for attempt in range(1, 31):
+        time.sleep(6)
+        out2, err2 = run_command("podman images", fail_on_failure=False, client=client)
+        if _podman_ready(out2, err2):
+            print(f"Podman machine started successfully (attempt {attempt}).")
+            return
+        print(f"Waiting for Podman (attempt {attempt}/30)...")
+
+    print("❌ Failed to start Podman machine.")
+    print(
+        "On Windows EC2, Podman needs WSL2/Hyper-V and NestedVirtualization "
+        "(use m7i/c7i+ with --cpu-options NestedVirtualization=enabled; "
+        "c4/t3 will not work)."
+    )
+    raise SystemExit(1)
 
 def normalise_url(version, url):
     if not url:

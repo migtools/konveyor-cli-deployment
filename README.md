@@ -192,6 +192,7 @@ EC2 provision (`ami and keyName are empty` / `AMI_ID: parameter null or not set`
 |-------|---------|
 | `AMI_LINUX` | AMI ID for the Linux/RHEL9 E2E VM |
 | `AMI_WINDOWS` | Windows E2E AMI (pipeline default/pin: `ami-0bb5f8331976a99ba`, passwordless SSH) |
+| `INSTANCE_TYPE_WINDOWS` | Windows EC2 type (pinned `m7i.2xlarge` + NestedVirtualization for Podman/WSL2) |
 | `AMI_MAC` | AMI ID for the macOS (Darwin) E2E VM |
 | `KEY_NAME` | EC2 key pair name associated with the SSH key above |
 | `SECURITY_GROUP_ID` | Security group for EC2 instances (usually required) |
@@ -210,7 +211,7 @@ oc patch integrationtestscenario ITS_NAME -n art-mta-tenant --type merge -p '{
       {"name": "AMI_WINDOWS", "value": "ami-0bb5f8331976a99ba"},
       {"name": "AMI_MAC", "value": "ami-0bc51312598ad4bec"},
       {"name": "INSTANCE_TYPE_LINUX", "value": "c6i.4xlarge"},
-      {"name": "INSTANCE_TYPE_WINDOWS", "value": "c4.xlarge"},
+      {"name": "INSTANCE_TYPE_WINDOWS", "value": "m7i.2xlarge"},
       {"name": "KEY_NAME", "value": "aws-vm-login-key"},
       {"name": "SECURITY_GROUP_ID", "value": "sg-0a3e6b53e86d0e69d"},
       {"name": "AWS_REGION", "value": "us-east-1"}
