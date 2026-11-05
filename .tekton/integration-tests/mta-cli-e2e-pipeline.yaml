@@ -63,9 +63,11 @@ spec:
       default: "t3.large"
 
     - name: INSTANCE_TYPE_WINDOWS
-      description: EC2 instance type for Windows lane
+      description: >
+        Windows EC2 type. Must support NestedVirtualization (WSL2/Podman machine).
+        c4/t3 do not; m7i/c7i (and newer) do.
       type: string
-      default: "t3.large"
+      default: "m7i.2xlarge"
 
     - name: INSTANCE_TYPE_MAC
       description: EC2 instance type for Darwin lane
@@ -269,8 +271,10 @@ spec:
         # IntegrationTestScenario AMI_WINDOWS value cannot override it.
         - name: ami
           value: ami-0bb5f8331976a99ba
+        # Pinned nested-virt instance type so ITS cannot keep c4.xlarge/t3.large
+        # (Podman machine / WSL2 will not start without NestedVirtualization).
         - name: instanceType
-          value: $(params.INSTANCE_TYPE_WINDOWS)
+          value: m7i.2xlarge
         - name: sshUser
           value: $(params.SSH_USER_WINDOWS)
         - name: platform
