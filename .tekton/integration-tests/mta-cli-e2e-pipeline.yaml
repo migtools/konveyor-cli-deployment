@@ -42,8 +42,11 @@ spec:
       type: string
 
     - name: AMI_WINDOWS
-      description: AMI ID for Windows E2E VM (required; set on IntegrationTestScenario)
+      description: >
+        Windows E2E AMI with OpenSSH launch-key injection (EC2Launch enableOpenSsh).
+        Default is pinned so lanes use passwordless SSH even if ITS omits/overrides late.
       type: string
+      default: "ami-0bb5f8331976a99ba"
 
     - name: AMI_MAC
       description: AMI ID for macOS E2E VM (required; set on IntegrationTestScenario)
@@ -262,8 +265,10 @@ spec:
           value: windows
         - name: resultSubdir
           value: windows
+        # Pinned passwordless-SSH AMI (ami-0bb5f8331976a99ba). Hardcoded so a stale
+        # IntegrationTestScenario AMI_WINDOWS value cannot override it.
         - name: ami
-          value: $(params.AMI_WINDOWS)
+          value: ami-0bb5f8331976a99ba
         - name: instanceType
           value: $(params.INSTANCE_TYPE_WINDOWS)
         - name: sshUser

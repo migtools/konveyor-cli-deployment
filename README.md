@@ -191,7 +191,7 @@ EC2 provision (`ami and keyName are empty` / `AMI_ID: parameter null or not set`
 | Param | Purpose |
 |-------|---------|
 | `AMI_LINUX` | AMI ID for the Linux/RHEL9 E2E VM |
-| `AMI_WINDOWS` | AMI ID for the Windows E2E VM |
+| `AMI_WINDOWS` | Windows E2E AMI (pipeline default/pin: `ami-0bb5f8331976a99ba`, passwordless SSH) |
 | `AMI_MAC` | AMI ID for the macOS (Darwin) E2E VM |
 | `KEY_NAME` | EC2 key pair name associated with the SSH key above |
 | `SECURITY_GROUP_ID` | Security group for EC2 instances (usually required) |
