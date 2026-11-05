@@ -35,15 +35,21 @@ out_win="$(TARGET_OS=windows "$ROOT/.tekton/integration-tests/scripts/art_pytest
   echo "excludes must ignore test_transform.py" >&2
   exit 1
 }
-# AMI_*/KEY_NAME must not default to "" (hides missing ITS config until late).
-if awk '/name: AMI_LINUX/,/name: AWS_REGION/' "$YML" | grep -q 'default:'; then
+# AMI_LINUX / AMI_MAC / KEY_NAME must not default to "" (hides missing ITS config).
+# AMI_WINDOWS is pinned to the passwordless OpenSSH AMI (default + hardcoded lane value).
+if awk '/name: AMI_LINUX$/,/name: AMI_WINDOWS$/' "$YML" | grep -q 'default:'; then
   echo "AMI_LINUX must not have a default" >&2
+  exit 1
+fi
+if awk '/name: AMI_MAC$/,/name: AWS_REGION$/' "$YML" | grep -q 'default:'; then
+  echo "AMI_MAC must not have a default" >&2
   exit 1
 fi
 if awk '/name: KEY_NAME/,/name: SECURITY_GROUP_ID/' "$YML" | grep -q 'default:'; then
   echo "KEY_NAME must not have a default" >&2
   exit 1
 fi
+grep -q 'ami-0bb5f8331976a99ba' "$YML"
 grep -q 'ami and keyName are empty' "$TASKS/run-os-e2e.yaml"
 grep -q 'kantra-cli-git-credentials' "$TASKS/run-os-e2e.yaml"
 grep -q 'name: GIT_USERNAME' "$TASKS/run-os-e2e.yaml"
