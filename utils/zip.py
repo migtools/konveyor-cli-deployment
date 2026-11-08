@@ -97,12 +97,18 @@ def unpack_zip(zip_file, target_path, client=None):
                 raise SystemExit("There was an issue with unpacking zip file: {}".format(err))
     else:
         try:
+            if not os.path.isfile(zip_file):
+                raise FileNotFoundError(
+                    f"Local CLI zip not found: {zip_file}. "
+                    f"Download likely failed earlier (check stage/GA URL for this version)."
+                )
             remote_home_dir = run_command("pwd", client=client)[0].strip()
             remote_zip = os.path.join(remote_home_dir, os.path.basename(zip_file))
-            logging.info(f"Local zip path: {zip_file}")
+            logging.info(f"Local zip path: {zip_file} ({os.path.getsize(zip_file)} bytes)")
             logging.info(f"Remote zip path: {remote_zip}")
             sftp = client.open_sftp()
             sftp.put(zip_file, remote_zip)
+
 
             # Cleanup folder on remote host
             logging.info(f"Clearing target path: {target_path}")

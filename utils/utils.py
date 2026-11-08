@@ -227,21 +227,28 @@ def pull_stage_ga_dependency_file(mta_version, repo, os_name=None, machine=None)
     if not os_name and not machine:
         os_name, machine = get_os_platform()
     dependency_file_name = f'mta-{mta_version}-cli-{os_name}-{machine}.zip'
-    dependency_file_url=zip_urls.get(repo).format(ver=mta_version) + dependency_file_name
+    base_url = zip_urls.get(repo)
+    if not base_url:
+        raise SystemExit(f"Unknown stage/GA repo '{repo}' (expected one of: {', '.join(sorted(zip_urls))})")
+    dependency_file_url = base_url.format(ver=mta_version) + dependency_file_name
     logging.info(f"Downloading dependency file from URL: {dependency_file_url}")
     download_file(dependency_file_url, dependency_file_name)
-    return dependency_file_name
+    return os.path.abspath(dependency_file_name)
 
 
 def download_file(url, local_filename):
-    response = requests.get(url, stream=True,verify=False)
-    if response.status_code == 200:
-        with open(local_filename, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        logging.info(f"File saved as {local_filename}")
-    else:
-        logging.error(f"Error downloading file: {response.status_code}")
+    response = requests.get(url, stream=True, verify=False)
+    if response.status_code != 200:
+        raise SystemExit(
+            f"Failed to download {url} (HTTP {response.status_code}). "
+            f"Stage/GA CLI zip must exist for this version before --build stage/ga E2E can run."
+        )
+    with open(local_filename, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
+    if not os.path.isfile(local_filename) or os.path.getsize(local_filename) == 0:
+        raise SystemExit(f"Download of {url} produced an empty or missing file: {local_filename}")
+    logging.info(f"File saved as {local_filename} ({os.path.getsize(local_filename)} bytes)")
 
 
 def get_os_platform ():
