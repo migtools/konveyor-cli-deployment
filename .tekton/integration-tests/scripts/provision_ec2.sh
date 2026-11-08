@@ -25,13 +25,16 @@ ARGS=(
 [[ -n "$SECURITY_GROUP_ID" ]] && ARGS+=(--security-group-ids "$SECURITY_GROUP_ID")
 [[ -n "$SUBNET_ID" ]] && ARGS+=(--subnet-id "$SUBNET_ID")
 # Windows Podman (WSL2/Hyper-V) needs nested virtualization; c4/t3 cannot provide it.
+NESTED_FLAG="false"
 if [[ "${NESTED_VIRTUALIZATION:-}" == "true" || "${TARGET_OS:-}" == "windows" ]]; then
+  NESTED_FLAG="true"
   ARGS+=(--cpu-options "NestedVirtualization=enabled")
   echo "Enabling NestedVirtualization for instance type ${INSTANCE_TYPE}"
 fi
 
-echo "Provisioning EC2: region=${AWS_REGION} ami=${AMI_ID} type=${INSTANCE_TYPE} key=${KEY_NAME} sg=${SECURITY_GROUP_ID:-default} subnet=${SUBNET_ID:-default} nested=${NESTED_VIRTUALIZATION:-TARGET_OS}"
-INSTANCE_ID="$(aws "${ARGS[@]}")"echo "aws ec2 run-instances returned INSTANCE_ID=${INSTANCE_ID}"
+echo "Provisioning EC2: region=${AWS_REGION} ami=${AMI_ID} type=${INSTANCE_TYPE} key=${KEY_NAME} sg=${SECURITY_GROUP_ID:-default} subnet=${SUBNET_ID:-default} nested=${NESTED_FLAG}"
+INSTANCE_ID="$(aws "${ARGS[@]}")"
+echo "aws ec2 run-instances returned INSTANCE_ID=${INSTANCE_ID}"
 mkdir -p "$RESULT_DIR"
 echo -n "$INSTANCE_ID" > "$RESULT_DIR/instance-id"
 aws ec2 wait instance-running --region "$AWS_REGION" --instance-ids "$INSTANCE_ID"
