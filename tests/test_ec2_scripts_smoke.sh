@@ -13,6 +13,12 @@ test -x "$SCRIPTS/aggregate_results.sh"
 test -x "$SCRIPTS/verify_results.sh"
 # Syntax check only (no AWS calls)
 bash -n "$SCRIPTS/provision_ec2.sh"
+# Guard against accidental line concatenation (set -u + adjacent echo expands unbound INSTANCE_ID).
+if grep -qE 'INSTANCE_ID="\$\(aws[^"]*\)"echo' "$SCRIPTS/provision_ec2.sh"; then
+  echo "provision_ec2.sh: INSTANCE_ID assignment must be on its own line" >&2
+  exit 1
+fi
+grep -qE '^INSTANCE_ID="\$\(aws "\$\{ARGS\[@\]\}"\)"$' "$SCRIPTS/provision_ec2.sh"
 bash -n "$SCRIPTS/wait_for_ssh.sh"
 bash -n "$SCRIPTS/cleanup_ec2.sh"
 bash -n "$SCRIPTS/extract_version_from_image.sh"
