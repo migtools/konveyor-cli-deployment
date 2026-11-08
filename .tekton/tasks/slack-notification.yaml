@@ -1,0 +1,162 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: slack-notification
+  labels:
+    app.kubernetes.io/version: "0.1"
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.12.1"
+    tekton.dev/categories: Notification
+    tekton.dev/tags: slack,notification
+    tekton.dev/displayName: "Send Slack Notification"
+spec:
+  description: >-
+    Send CLI E2E results notification to Slack.
+    Reports Linux/Windows/Darwin lane status, MTA version, and a Konflux PipelineRun link.
+
+  params:
+    - name: linuxStatus
+      type: string
+      description: Linux E2E task status (Succeeded/Failed/Skipped)
+    - name: windowsStatus
+      type: string
+      description: Windows E2E task status (Succeeded/Failed/Skipped)
+    - name: darwinStatus
+      type: string
+      description: Darwin E2E task status (Succeeded/Failed/Skipped)
+    - name: verifyStatus
+      type: string
+      default: "None"
+      description: verify-results task status (Succeeded/Failed/Skipped/None)
+    - name: mtaVersion
+      type: string
+      default: "unknown"
+      description: MTA CLI version under test
+    - name: snapshotJson
+      type: string
+      description: Konflux snapshot JSON
+    - name: pipelineRunName
+      type: string
+      description: Name of the pipeline run
+    - name: slackWebhookSecretName
+      type: string
+      default: "slack-webhook"
+      description: Name of the Kubernetes Secret containing Slack webhook URL
+    - name: slackWebhookSecretKey
+      type: string
+      default: "url"
+      description: Key in the secret containing the webhook URL
+
+  steps:
+    - name: send-notification
+      image: registry.redhat.io/openshift4/ose-cli:latest
+      env:
+        - name: SLACK_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: $(params.slackWebhookSecretName)
+              key: $(params.slackWebhookSecretKey)
+      script: |
+        #!/bin/bash
+        set -euo pipefail
+
+        LINUX_STATUS="$(params.linuxStatus)"
+        WINDOWS_STATUS="$(params.windowsStatus)"
+        DARWIN_STATUS="$(params.darwinStatus)"
+        VERIFY_STATUS="$(params.verifyStatus)"
+        MTA_VERSION="$(params.mtaVersion)"
+        SNAPSHOT_JSON='$(params.snapshotJson)'
+        PIPELINE_RUN="$(params.pipelineRunName)"
+
+        # Extract snapshot name from pipelineRun label
+        SNAPSHOT_NAME=$(oc get pipelinerun "$PIPELINE_RUN" -o jsonpath='{.metadata.labels.appstudio\.openshift\.io/snapshot}' 2>/dev/null || true)
+
+        # Fallback: use application name
+        if [ -z "$SNAPSHOT_NAME" ]; then
+          SNAPSHOT_NAME=$(echo "$SNAPSHOT_JSON" | grep -o '"application":"[^"]*"' | cut -d'"' -f4 || true)
+        fi
+
+        # Last resort
+        if [ -z "$SNAPSHOT_NAME" ]; then
+          SNAPSHOT_NAME="unknown"
+        fi
+
+        # Extract application name from snapshot JSON for dynamic Konflux link
+        APPLICATION_NAME=$(echo "$SNAPSHOT_JSON" | grep -o '"application":"[^"]*"' | cut -d'"' -f4 || true)
+        if [ -z "$APPLICATION_NAME" ]; then
+          APPLICATION_NAME="unknown"
+        fi
+
+        status_text() {
+          case "$1" in
+            Succeeded) echo "PASSED" ;;
+            Failed) echo "FAILED" ;;
+            *) echo "SKIPPED" ;;
+          esac
+        }
+
+        LINUX_TEXT=$(status_text "$LINUX_STATUS")
+        WINDOWS_TEXT=$(status_text "$WINDOWS_STATUS")
+        DARWIN_TEXT=$(status_text "$DARWIN_STATUS")
+
+        if [ "$VERIFY_STATUS" = "Succeeded" ]; then
+          OVERALL_TEXT="PASSED"
+        elif [ "$VERIFY_STATUS" = "Failed" ]; then
+          OVERALL_TEXT="FAILED"
+        elif [ "$LINUX_STATUS" = "Failed" ] || [ "$WINDOWS_STATUS" = "Failed" ] || [ "$DARWIN_STATUS" = "Failed" ]; then
+          OVERALL_TEXT="FAILED"
+        elif [ "$LINUX_STATUS" = "Succeeded" ] && [ "$WINDOWS_STATUS" = "Succeeded" ] && [ "$DARWIN_STATUS" = "Succeeded" ]; then
+          OVERALL_TEXT="PASSED"
+        else
+          OVERALL_TEXT="INCOMPLETE"
+        fi
+
+        echo "Sending Slack notification"
+        echo "Snapshot: $SNAPSHOT_NAME"
+        echo "MTA version: $MTA_VERSION"
+        echo "Linux: $LINUX_TEXT"
+        echo "Windows: $WINDOWS_TEXT"
+        echo "Darwin: $DARWIN_TEXT"
+        echo "Overall: $OVERALL_TEXT"
+
+        PIPELINE_LINK="https://konflux-ui.apps.kflux-ocp-p01.7ayg.p1.openshiftapps.com/ns/art-mta-tenant/applications/$APPLICATION_NAME/pipelineruns/$PIPELINE_RUN"
+
+        # Construct message for Slack Workflow (CLI E2E fields)
+        MESSAGE=$(cat <<EOF
+        {
+          "snapshot": "$SNAPSHOT_NAME",
+          "mta_version": "$MTA_VERSION",
+          "overall": "$OVERALL_TEXT",
+          "linux": "$LINUX_TEXT",
+          "windows": "$WINDOWS_TEXT",
+          "darwin": "$DARWIN_TEXT",
+          "pipeline": "$PIPELINE_LINK"
+        }
+        EOF
+        )
+
+        if ! command -v curl &> /dev/null; then
+          echo "Installing curl..."
+          if ! microdnf install -y curl; then
+            echo "Failed to install curl"
+            exit 1
+          fi
+        else
+          echo "curl already installed"
+        fi
+
+        echo "Sending notification to Slack..."
+        HTTP_CODE=$(curl -X POST -H 'Content-type: application/json' \
+          --data "$MESSAGE" \
+          -w "%{http_code}" \
+          -o /tmp/slack-response.txt \
+          "$SLACK_WEBHOOK_URL")
+
+        if [ "$HTTP_CODE" = "200" ]; then
+          echo "Slack notification sent successfully"
+        else
+          echo "Failed to send Slack notification (HTTP $HTTP_CODE)"
+          cat /tmp/slack-response.txt || true
+          # Do not fail the finally task on webhook errors
+          exit 0
+        fi
