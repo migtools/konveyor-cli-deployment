@@ -15,6 +15,8 @@
 #       (key: ssh-privatekey → file /secrets/aws-vm-login-key.pem)
 #   - kantra-cli-git-credentials: GitHub user + PAT for kantra-cli-tests .env
 #       (keys: git_username, git_password) — optional mount; needed for private-repo tests
+#   - slack-webhook: Slack incoming webhook / Workflow trigger URL (key: url)
+#       used by finally/slack-notification
 #
 # No MISC_DOWNSTREAM_URL param for v1 (stage/GA artifacts are pre-published).
 #
@@ -407,3 +409,38 @@ spec:
             value: main
           - name: pathInRepo
             value: .tekton/tasks/verify-results.yaml
+
+  finally:
+    # Same pattern as migtools/mta-tackle2-ui mta-fbc-e2e-pipeline slack-notification.
+    - name: slack-notification
+      when:
+        - input: "run"
+          operator: in
+          values: ["run"] # Set to "skip" to disable Slack notifications during testing
+        - input: "$(tasks.prepare-workspace.status)"
+          operator: in
+          values: ["Succeeded"] # Only notify when OS lanes were attempted
+      params:
+        - name: linuxStatus
+          value: "$(tasks.linux-e2e.status)"
+        - name: windowsStatus
+          value: "$(tasks.windows-e2e.status)"
+        - name: darwinStatus
+          value: "$(tasks.darwin-e2e.status)"
+        - name: verifyStatus
+          value: "$(tasks.verify-results.status)"
+        - name: mtaVersion
+          value: "$(tasks.prepare-workspace.results.mtaVersion)"
+        - name: snapshotJson
+          value: "$(params.SNAPSHOT)"
+        - name: pipelineRunName
+          value: "$(context.pipelineRun.name)"
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/migtools/konveyor-cli-deployment
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: .tekton/tasks/slack-notification.yaml

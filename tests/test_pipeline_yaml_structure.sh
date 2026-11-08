@@ -15,6 +15,8 @@ grep -q 'name: windows-e2e' "$YML"
 grep -q 'name: darwin-e2e' "$YML"
 grep -q 'name: aggregate-results' "$YML"
 grep -q 'name: verify-results' "$YML"
+grep -q 'name: slack-notification' "$YML"
+grep -q 'finally:' "$YML"
 grep -q 'AMI_LINUX' "$YML"
 grep -q 'FAILURE_TTL_HOURS' "$YML"
 grep -q 'pytest -s -v --junitxml=junit.xml' "$YML"
@@ -63,12 +65,15 @@ grep -q '\.tekton/tasks/prepare-workspace.yaml' "$YML"
 grep -q '\.tekton/tasks/run-os-e2e.yaml' "$YML"
 grep -q '\.tekton/tasks/aggregate-results.yaml' "$YML"
 grep -q '\.tekton/tasks/verify-results.yaml' "$YML"
+grep -q '\.tekton/tasks/slack-notification.yaml' "$YML"
 
-for task in verify-image-pullable prepare-workspace run-os-e2e aggregate-results verify-results; do
+for task in verify-image-pullable prepare-workspace run-os-e2e aggregate-results verify-results slack-notification; do
   f="$TASKS/${task}.yaml"
   test -f "$f"
   grep -q 'kind: Task' "$f"
 done
+grep -q 'slack-webhook' "$TASKS/slack-notification.yaml"
+grep -q 'SLACK_WEBHOOK_URL' "$TASKS/slack-notification.yaml"
 
 grep -q 'name: verificationStatus' "$TASKS/verify-image-pullable.yaml"
 grep -q 'name: prepareStatus' "$TASKS/prepare-workspace.yaml"
