@@ -33,13 +33,40 @@ logging.basicConfig(
 import subprocess
 import logging
 
+def _is_windows_ssh(client):
+    """True when the SSH peer is OpenSSH for Windows (no bash in PATH by default)."""
+    if client is None:
+        return False
+    cached = getattr(client, "_mta_is_windows_ssh", None)
+    if cached is not None:
+        return cached
+    transport = client.get_transport() if hasattr(client, "get_transport") else None
+    ver = (transport.remote_version if transport else "") or ""
+    is_win = "OpenSSH_for_Windows" in ver or "Windows" in ver
+    try:
+        client._mta_is_windows_ssh = is_win
+    except Exception:
+        pass
+    return is_win
+
+
+def _wrap_remote_command(command, client):
+    """
+    Linux/macOS remotes: bash -lc for reliable quoting and shell features.
+    Windows OpenSSH: run the command as-is (cmd/PowerShell default) — wrapping
+    with bash -lc fails with "'bash' is not recognized".
+    """
+    if _is_windows_ssh(client):
+        return command
+    return f"bash -lc {shlex.quote(command)}"
+
+
 def run_command(command, fail_on_failure=True, client=None):
     logging.info(f"Executing command: {command}")
     try:
         if client:
-            safe_cmd = shlex.quote(command)
-            command = f"bash -lc {safe_cmd}"
-            _stdin, stdout, _stderr = client.exec_command(command)
+            remote_cmd = _wrap_remote_command(command, client)
+            _stdin, stdout, _stderr = client.exec_command(remote_cmd)
 
             out = stdout.read().decode()
             err = _stderr.read().decode()
@@ -67,6 +94,8 @@ def run_command(command, fail_on_failure=True, client=None):
                     f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
                 )
             return result.stdout, result.stderr
+    except SystemExit:
+        raise
     except Exception as err:
         raise SystemExit(f"There was an issue running a command: {err}")
 
@@ -128,20 +157,9 @@ def get_target_dependency_path(client=None):
     :param: client: SSH client for getting home dir from remote host
     :return: String contains folder name
     """
-    if client:
-        try:
-            stdin, stdout, stderr = client.exec_command('echo $HOME')
-            home_dir = stdout.read().decode().strip()
-            if not home_dir:
-                # В качестве запасного варианта используем 'pwd'
-                stdin, stdout, stderr = client.exec_command('pwd')
-                home_dir = stdout.read().decode().strip()
-        except Exception as err:
-            raise SystemExit("There was an issue getting home dir of remote host: {}".format(err))
-    else:
-        home_dir = os.path.expanduser("~")
-
-    return os.path.join(home_dir, ".kantra")
+    home_dir = get_home_dir(client=client) if client else os.path.expanduser("~")
+    # Prefer forward slashes for remote paths (OpenSSH/Windows + Linux).
+    return f"{home_dir.rstrip('/').rstrip(chr(92))}/.kantra"
 
 
 def clear_folder (path):
@@ -281,6 +299,17 @@ def get_repo_folder_name(repo_url: str) -> str:
 
 
 def get_home_dir(client=None):
+    if client and _is_windows_ssh(client):
+        # cmd.exe expansion; avoid bash $HOME which prints literally on Windows OpenSSH.
+        out, _ = run_command("echo %USERPROFILE%", client=client)
+        home = out.strip().splitlines()[-1].strip() if out.strip() else ""
+        if not home or home.upper() == "%USERPROFILE%":
+            out, _ = run_command(
+                "powershell -NoProfile -Command \"Write-Output $env:USERPROFILE\"",
+                client=client,
+            )
+            home = out.strip().splitlines()[-1].strip()
+        return home.replace("\\", "/")
     return run_command("echo $HOME", client=client)[0].strip()
 
 
@@ -307,7 +336,15 @@ def write_env_file(env_path, env_dict, client=None):
             try:
                 sftp.stat(dir_path)
             except FileNotFoundError:
-                client.exec_command(f"mkdir -p {dir_path}")
+                if _is_windows_ssh(client):
+                    run_command(
+                        f"powershell -NoProfile -Command "
+                        f"\"New-Item -ItemType Directory -Force -Path '{dir_path}' | Out-Null\"",
+                        client=client,
+                        fail_on_failure=False,
+                    )
+                else:
+                    run_command(f"mkdir -p {dir_path}", client=client, fail_on_failure=False)
 
             # Write file
             with sftp.file(env_path, "w") as f:
@@ -345,13 +382,19 @@ def ensure_podman_running(client=None):
         return
 
     print("Podman is not ready. Ensuring default machine exists, then starting it...")
-    # Create default machine if none exists (idempotent-ish).
-    run_command(
-        "podman machine inspect podman-machine-default >/dev/null 2>&1 || "
-        "podman machine init --cpus 2 --memory 4096 --disk-size 60",
+    # Avoid bash-only `||` / redirects — Windows OpenSSH has no bash by default.
+    inspect_out, inspect_err = run_command(
+        "podman machine inspect podman-machine-default",
         fail_on_failure=False,
         client=client,
     )
+    inspect_text = f"{inspect_out or ''}{inspect_err or ''}"
+    if "Error" in inspect_text or "no such machine" in inspect_text.lower() or not inspect_out.strip():
+        run_command(
+            "podman machine init --cpus 2 --memory 4096 --disk-size 60",
+            fail_on_failure=False,
+            client=client,
+        )
     start_out, start_err = run_command(
         "podman machine start",
         fail_on_failure=False,
@@ -359,6 +402,11 @@ def ensure_podman_running(client=None):
     )
     print(f"podman machine start stdout:\n{start_out}")
     print(f"podman machine start stderr:\n{start_err}")
+    if start_err and "bash" in start_err.lower() and "not recognized" in start_err.lower():
+        raise SystemExit(
+            "Remote shell cannot run bash; Windows OpenSSH must execute podman without "
+            f"bash -lc wrapping. stderr:\n{start_err}"
+        )
 
     # WSL2/Hyper-V boot can take well over a few seconds on a fresh VM.
     for attempt in range(1, 31):
