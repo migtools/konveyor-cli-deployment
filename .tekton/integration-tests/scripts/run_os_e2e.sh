@@ -81,10 +81,16 @@ PY
 
 cd "$CLI_DEPLOY_DIR"
 # Invoke via python3: Task image has no /usr/bin/python (ubi9/python-311).
-# Same stage flow as local/remote today: pull_stage_ga_* via --build stage
+# Pipeline uses FBC-native install (--build fbc): related-images from SNAPSHOT +
+# CLI zip assembled on the VM from mta-cli image (no download.devel stage zip).
+: "${FBC_IMAGE:?FBC_IMAGE required for --build fbc}"
+mkdir -p "$RESULT_DIR/fbc"
+RELATED_IMAGES="$RESULT_DIR/fbc/related-images.json"
+"$SCRIPT_DIR/fetch_fbc_related_images.sh" "$FBC_IMAGE" "$RELATED_IMAGES"
 python3 ./install_cli.py \
   --mta_version "$MTA_VERSION" \
-  --build stage \
+  --build fbc \
+  --image_output_file "$RELATED_IMAGES" \
   --os "$TARGET_OS" \
   --platform "$PLATFORM" \
   --ip_address "$PUBLIC_IP"

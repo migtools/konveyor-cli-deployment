@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import shutil
@@ -138,6 +139,76 @@ def generate_images_list(version, build):
     return run_command(get_images_output_command)
 
 
+def _stage_rewrite(image: str) -> str:
+    return image.replace("registry.redhat.io", "registry.stage.redhat.io")
+
+
+def load_image_list(path: str):
+    """
+    Load container image refs from either:
+      - Konflux related-images.json (list or dict of pullspecs), or
+      - Operator CSV YAML with spec.relatedImages[].image
+    Always rewrites registry.redhat.io → registry.stage.redhat.io.
+    """
+    if not path or not os.path.exists(path):
+        raise SystemExit(f"Image list file not found: {path}")
+
+    with open(path, "r", encoding="utf-8") as fh:
+        raw = fh.read()
+
+    # Prefer JSON (related-images.json)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        data = None
+
+    images = []
+    if isinstance(data, list):
+        for item in data:
+            if isinstance(item, str) and item.strip():
+                images.append(_stage_rewrite(item.strip()))
+            elif isinstance(item, dict) and item.get("image"):
+                images.append(_stage_rewrite(item["image"]))
+    elif isinstance(data, dict):
+        # Map of name→pullspec or already-parsed structure
+        if "spec" in data and isinstance(data["spec"], dict):
+            related = data["spec"].get("relatedImages") or []
+            for item in related:
+                if isinstance(item, dict) and item.get("image"):
+                    images.append(_stage_rewrite(item["image"]))
+        else:
+            for value in data.values():
+                if isinstance(value, str) and ("@" in value or value.startswith("registry.")):
+                    images.append(_stage_rewrite(value))
+    else:
+        # CSV / YAML fallback
+        try:
+            yaml_data = yaml.safe_load(raw) or {}
+        except yaml.YAMLError as ye:
+            raise SystemExit(f"Failed to parse image list {path}: {ye}") from ye
+        related = (yaml_data.get("spec") or {}).get("relatedImages") or []
+        for item in related:
+            if isinstance(item, dict) and item.get("image"):
+                images.append(_stage_rewrite(item["image"]))
+
+    if not images:
+        raise SystemExit(f"No images found in {path}")
+    logging.info(f"Loaded {len(images)} images from {path}")
+    return images
+
+
+def find_cli_image(images):
+    """Return the mta-cli-rhel9 (or mta-cli) pullspec from a related-images list."""
+    for image in images or []:
+        lower = image.lower()
+        if "mta-cli-rhel9" in lower or "/mta-cli@" in lower or "mta-cli@" in lower:
+            return image
+    for image in images or []:
+        if "mta-cli" in image.lower() or "cli-rhel" in image.lower():
+            return image
+    raise SystemExit("No mta-cli image found in related-images list")
+
+
 def generate_konflux_images_list(url=None, file=None):
     container_name = "tmp-bundle"
     manifests_dir = "./manifests"
@@ -146,6 +217,10 @@ def generate_konflux_images_list(url=None, file=None):
     created_container = False
 
     try:
+        if file and not url:
+            # CSV YAML or related-images.json — shared loader
+            return load_image_list(file)
+
         if url:
             # 1. Create the container (run_command raises on failure)
             get_images_command = f"podman create --name {container_name} {url} /bin/true"
@@ -163,16 +238,7 @@ def generate_konflux_images_list(url=None, file=None):
             print(f"Error: Target file not found at {file_path}")
             return []
 
-        with open(file_path, 'r') as f:
-            data = yaml.safe_load(f) or {}
-
-        related_images = data.get('spec', {}).get('relatedImages', [])
-
-        # 4. Extract and transform image URLs
-        images_list = [
-            item['image'].replace("registry.redhat.io", "registry.stage.redhat.io")
-            for item in related_images if 'image' in item
-        ]
+        images_list = load_image_list(file_path)
 
     except yaml.YAMLError as ye:
         print(f"Error: Failed to parse YAML file. Details: {ye}")

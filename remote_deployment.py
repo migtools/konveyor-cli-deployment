@@ -2,11 +2,47 @@ import logging
 import os
 
 import config
+from utils.fbc_cli_extract import extract_cli_zip
 from utils.images import remove_old_images, generate_images_list, pull_tag_images, pull_stage_ga_images, \
-    generate_konflux_images_list, pull_images_by_list
+    generate_konflux_images_list, pull_images_by_list, load_image_list, find_cli_image
 from utils.utils import connect_ssh, read_file, get_target_dependency_path, ensure_podman_running, \
-    pull_stage_ga_dependency_file, normalise_url, get_latest_upstream_dependency, download_file
-from utils.zip import generate_zip, get_zip_folder_name, get_zip_name, unpack_zip, generate_konflux_zip
+    pull_stage_ga_dependency_file, normalise_url, get_latest_upstream_dependency, download_file, \
+    run_command
+from utils.zip import generate_zip, get_zip_folder_name, get_zip_name, unpack_zip, unpack_remote_zip, \
+    generate_konflux_zip
+
+
+def _deploy_from_fbc(version, image_output_file, arg_dependency_file, host_os, host_platform,
+                     target_path, client):
+    """Pipeline FBC-native path: related-images + zip from CLI image (no stage URL / misc-downstream)."""
+    if not image_output_file:
+        raise SystemExit("--build fbc requires --image_output_file (related-images.json from FBC)")
+    logging.info(f"FBC deploy: loading related images from {image_output_file}")
+    image_list = load_image_list(image_output_file)
+    pull_images_by_list(version, image_list, client=client)
+
+    if not target_path:
+        target_path = get_target_dependency_path(client)
+
+    if arg_dependency_file:
+        logging.info(f"FBC deploy: using provided dependency zip {arg_dependency_file}")
+        unpack_zip(arg_dependency_file, target_path, client)
+        return
+
+    cli_image = find_cli_image(image_list)
+    logging.info(f"FBC deploy: extracting CLI zip from {cli_image} for {host_os}/{host_platform}")
+    # Avoid mktemp template differences across Linux/Windows Git Bash.
+    out_dir = f"/tmp/mta-fbc-cli-{host_os}-{host_platform or 'amd64'}"
+    run_command(f"rm -rf {out_dir} && mkdir -p {out_dir}", client=client)
+    remote_zip = extract_cli_zip(
+        cli_image=cli_image,
+        version=version,
+        platform=host_os,
+        arch=host_platform or "amd64",
+        output_dir=out_dir,
+        client=client,
+    )
+    unpack_remote_zip(remote_zip, target_path, client)
 
 
 def run_remote_deployment(data):
@@ -33,6 +69,13 @@ def run_remote_deployment(data):
 
     try:
         ensure_podman_running(client=client)
+        if build == "fbc":
+            _deploy_from_fbc(
+                version, image_output_file, arg_dependency_file, host_os, host_platform,
+                target_path, client,
+            )
+            return
+
         if version and not upstream:
             version_tuple = tuple(map(int, version.split('.')))
             remove_old_images(version, client=client)

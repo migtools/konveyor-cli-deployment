@@ -48,6 +48,8 @@ if __name__ == "__main__":
                               "args_image_output_file": args.image_output_file,
                               "args_dependency_file": args.dependency_file,
                               "args_upstream": args.upstream,
+                              "args_os": args.os,
+                              "args_platform": args.platform,
                               "install_path": args.install_path
                           })
     else:

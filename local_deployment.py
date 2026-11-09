@@ -1,12 +1,44 @@
 import logging
 import os
+import tempfile
 
 import config
+from utils.fbc_cli_extract import extract_cli_zip
 from utils.images import remove_old_images, generate_images_list, pull_tag_images, pull_stage_ga_images, \
-    generate_konflux_images_list, pull_images_by_list
+    generate_konflux_images_list, pull_images_by_list, load_image_list, find_cli_image
 from utils.utils import read_file, get_target_dependency_path, get_latest_upstream_dependency, download_file, \
     pull_stage_ga_dependency_file, ensure_podman_running, normalise_url
 from utils.zip import generate_zip, get_zip_folder_name, get_zip_name, unpack_zip, generate_konflux_zip
+
+
+def _deploy_from_fbc(version, image_output_file, arg_dependency_file, host_os, host_platform, target_path):
+    """Local FBC-native path (parity with remote --build fbc)."""
+    if not image_output_file:
+        raise SystemExit("--build fbc requires --image_output_file (related-images.json from FBC)")
+    logging.info(f"FBC deploy: loading related images from {image_output_file}")
+    image_list = load_image_list(image_output_file)
+    pull_images_by_list(version, image_list)
+
+    if not target_path:
+        target_path = get_target_dependency_path()
+
+    if arg_dependency_file:
+        logging.info(f"FBC deploy: using provided dependency zip {arg_dependency_file}")
+        unpack_zip(arg_dependency_file, target_path)
+        return
+
+    cli_image = find_cli_image(image_list)
+    logging.info(f"FBC deploy: extracting CLI zip from {cli_image}")
+    with tempfile.TemporaryDirectory(prefix="mta-fbc-cli-") as out_dir:
+        zip_path = extract_cli_zip(
+            cli_image=cli_image,
+            version=version,
+            platform=host_os or "linux",
+            arch=host_platform or "amd64",
+            output_dir=out_dir,
+            client=None,
+        )
+        unpack_zip(zip_path, target_path)
 
 
 def run_local_deployment(data):
@@ -21,8 +53,17 @@ def run_local_deployment(data):
         upstream = False
     image_output_file = data["args_image_output_file"]
     arg_dependency_file = data["args_dependency_file"]
+    host_os = data.get("args_os")
+    host_platform = data.get("args_platform")
     full_zip_name = ""
     ensure_podman_running()
+
+    if build == "fbc":
+        _deploy_from_fbc(
+            version, image_output_file, arg_dependency_file, host_os, host_platform, target_path
+        )
+        return
+
     if version and not upstream:
         version_tuple = tuple(map(int, version.split('.')))
         remove_old_images(version)

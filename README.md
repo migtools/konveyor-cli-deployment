@@ -236,9 +236,13 @@ Defaults match typical AMI arches. Override if your AMI differs (e.g. Intel Mac)
 
 ### Install path
 
-Remote deploy uses the same flow as local/remote runs today:
-`install_cli.py --mta_version <version> --build stage` with stage/GA artifacts
-pre-published. No `MISC_DOWNSTREAM_URL` parameter is used in v1.
+- **Pipeline / ITS:** each OS lane fetches FBC `related-images.json` from the
+  SNAPSHOT image and runs
+  `install_cli.py --mta_version <version> --build fbc --image_output_file …`.
+  Provider images and the CLI zip are taken from the FBC/CLI container (no
+  `download.devel` stage zip; works for unpublished versions).
+- **Local:** unchanged — `--build stage|ga|candidate` and konflux+`--image`
+  with misc-downstream still work as before.
 
 ### Pipeline behavior
 
