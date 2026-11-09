@@ -1,3 +1,4 @@
+import base64
 import logging
 import os
 import random
@@ -50,14 +51,34 @@ def _is_windows_ssh(client):
     return is_win
 
 
+def _windows_remote_command(command):
+    """
+    Run a command on Windows OpenSSH with Machine+User PATH restored.
+
+    Non-interactive OpenSSH sessions often get a stripped PATH, so tools installed
+    for the interactive user (e.g. Podman under Program Files) are "not recognized".
+    Avoid bash -lc (not present on stock OpenSSH_for_Windows).
+    """
+    # PowerShell single-quoted here-string keeps the payload literal (no escaping hell).
+    script = (
+        "$mp = [Environment]::GetEnvironmentVariable('Path','Machine'); "
+        "$up = [Environment]::GetEnvironmentVariable('Path','User'); "
+        "$env:Path = \"$mp;$up\"; "
+        # Common Podman install dirs as a last-resort prepend.
+        "$env:Path = \"C:\\Program Files\\RedHat\\Podman;C:\\Program Files\\Podman;$env:Path\"; "
+        f"cmd.exe /c @'\n{command}\n'@\n"
+    )
+    encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+    return f"powershell.exe -NoProfile -EncodedCommand {encoded}"
+
+
 def _wrap_remote_command(command, client):
     """
     Linux/macOS remotes: bash -lc for reliable quoting and shell features.
-    Windows OpenSSH: run the command as-is (cmd/PowerShell default) — wrapping
-    with bash -lc fails with "'bash' is not recognized".
+    Windows OpenSSH: restore Machine+User PATH via PowerShell (no bash).
     """
     if _is_windows_ssh(client):
-        return command
+        return _windows_remote_command(command)
     return f"bash -lc {shlex.quote(command)}"
 
 
@@ -402,10 +423,13 @@ def ensure_podman_running(client=None):
     )
     print(f"podman machine start stdout:\n{start_out}")
     print(f"podman machine start stderr:\n{start_err}")
-    if start_err and "bash" in start_err.lower() and "not recognized" in start_err.lower():
+    if start_err and "not recognized" in start_err.lower():
+        where_out, where_err = run_command("where podman", fail_on_failure=False, client=client)
         raise SystemExit(
-            "Remote shell cannot run bash; Windows OpenSSH must execute podman without "
-            f"bash -lc wrapping. stderr:\n{start_err}"
+            "podman is not on PATH for this Windows OpenSSH session "
+            "(even after restoring Machine+User PATH). "
+            f"where podman => out={where_out!r} err={where_err!r}\n"
+            f"machine start stderr:\n{start_err}"
         )
 
     # WSL2/Hyper-V boot can take well over a few seconds on a fresh VM.
