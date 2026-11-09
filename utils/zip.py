@@ -77,6 +77,19 @@ def _make_binaries_executable(target_path, client=None):
         run_command(f"chmod +x {binary_path}", client=client)
 
 
+def unpack_remote_zip(remote_zip, target_path, client):
+    """Unpack a zip that already exists on the remote host (no sftp upload)."""
+    if not client:
+        raise SystemExit("unpack_remote_zip requires an SSH client")
+    logging.info(f"Clearing target path: {target_path}")
+    run_command(f"rm -rf {target_path}/*", client=client)
+    logging.info(f"Unpacking remote zip {remote_zip} to {target_path}")
+    run_command(f"unzip -o {remote_zip} -d {target_path}", client=client)
+    _make_binaries_executable(target_path, client=client)
+    run_command(f"rm -f {remote_zip}", client=client, fail_on_failure=False)
+    logging.info(f"Remote zip {remote_zip} unpacked successfully to {target_path}")
+
+
 def unpack_zip(zip_file, target_path, client=None):
     """
     Unpacks a ZIP file into the specified target directory.
@@ -108,7 +121,6 @@ def unpack_zip(zip_file, target_path, client=None):
             logging.info(f"Remote zip path: {remote_zip}")
             sftp = client.open_sftp()
             sftp.put(zip_file, remote_zip)
-
 
             # Cleanup folder on remote host
             logging.info(f"Clearing target path: {target_path}")
