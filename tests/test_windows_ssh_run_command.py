@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Windows OpenSSH must not wrap remote commands in bash -lc."""
+"""Windows OpenSSH must not wrap remote commands in bash -lc; restore PATH for podman."""
+import base64
 import os
 import sys
 import unittest
-from unittest import mock
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
 
-from utils.utils import _is_windows_ssh, _wrap_remote_command  # noqa: E402
+from utils.utils import _is_windows_ssh, _wrap_remote_command, _windows_remote_command  # noqa: E402
 
 
 class _FakeTransport:
@@ -28,7 +28,6 @@ class WindowsSshRunCommandTests(unittest.TestCase):
     def test_detect_windows_openssh(self):
         client = _FakeClient("SSH-2.0-OpenSSH_for_Windows_8.1")
         self.assertTrue(_is_windows_ssh(client))
-        # cached
         self.assertTrue(_is_windows_ssh(client))
 
     def test_detect_linux_openssh(self):
@@ -41,11 +40,23 @@ class WindowsSshRunCommandTests(unittest.TestCase):
         self.assertTrue(wrapped.startswith("bash -lc "))
         self.assertIn("podman images", wrapped)
 
-    def test_wrap_windows_no_bash(self):
+    def test_wrap_windows_no_bash_restores_path(self):
         client = _FakeClient("SSH-2.0-OpenSSH_for_Windows_8.1")
         wrapped = _wrap_remote_command("podman images", client)
-        self.assertEqual(wrapped, "podman images")
-        self.assertNotIn("bash", wrapped)
+        self.assertNotIn("bash -lc", wrapped)
+        self.assertTrue(wrapped.startswith("powershell.exe -NoProfile -EncodedCommand "))
+        encoded = wrapped.split("EncodedCommand ", 1)[1]
+        script = base64.b64decode(encoded).decode("utf-16le")
+        self.assertIn("GetEnvironmentVariable('Path','Machine')", script)
+        self.assertIn("GetEnvironmentVariable('Path','User')", script)
+        self.assertIn("RedHat\\Podman", script)
+        self.assertIn("podman images", script)
+
+    def test_windows_remote_command_preserves_payload(self):
+        cmd = 'powershell -NoProfile -Command "Write-Output $env:TEMP"'
+        wrapped = _windows_remote_command(cmd)
+        script = base64.b64decode(wrapped.split("EncodedCommand ", 1)[1]).decode("utf-16le")
+        self.assertIn(cmd, script)
 
 
 if __name__ == "__main__":
