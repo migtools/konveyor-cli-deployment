@@ -31,9 +31,27 @@ def _deploy_from_fbc(version, image_output_file, arg_dependency_file, host_os, h
 
     cli_image = find_cli_image(image_list)
     logging.info(f"FBC deploy: extracting CLI zip from {cli_image} for {host_os}/{host_platform}")
-    # Avoid mktemp template differences across Linux/Windows Git Bash.
-    out_dir = f"/tmp/mta-fbc-cli-{host_os}-{host_platform or 'amd64'}"
-    run_command(f"rm -rf {out_dir} && mkdir -p {out_dir}", client=client)
+    from utils.utils import _is_windows_ssh, get_home_dir
+
+    if _is_windows_ssh(client):
+        # %TEMP% via PowerShell; forward slashes for podman/OpenSSH friendliness.
+        temp_out, _ = run_command(
+            "powershell -NoProfile -Command \"Write-Output $env:TEMP\"",
+            client=client,
+        )
+        temp_root = temp_out.strip().splitlines()[-1].strip().replace("\\", "/")
+        if not temp_root:
+            temp_root = f"{get_home_dir(client=client)}/AppData/Local/Temp"
+        out_dir = f"{temp_root}/mta-fbc-cli-{host_os}-{host_platform or 'amd64'}"
+        run_command(
+            f"powershell -NoProfile -Command "
+            f"\"Remove-Item -LiteralPath '{out_dir}' -Recurse -Force -ErrorAction SilentlyContinue; "
+            f"New-Item -ItemType Directory -Force -Path '{out_dir}' | Out-Null\"",
+            client=client,
+        )
+    else:
+        out_dir = f"/tmp/mta-fbc-cli-{host_os}-{host_platform or 'amd64'}"
+        run_command(f"rm -rf {out_dir} && mkdir -p {out_dir}", client=client)
     remote_zip = extract_cli_zip(
         cli_image=cli_image,
         version=version,

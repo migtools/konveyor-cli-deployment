@@ -81,12 +81,25 @@ def unpack_remote_zip(remote_zip, target_path, client):
     """Unpack a zip that already exists on the remote host (no sftp upload)."""
     if not client:
         raise SystemExit("unpack_remote_zip requires an SSH client")
+    from utils.utils import _is_windows_ssh
+
     logging.info(f"Clearing target path: {target_path}")
-    run_command(f"rm -rf {target_path}/*", client=client)
-    logging.info(f"Unpacking remote zip {remote_zip} to {target_path}")
-    run_command(f"unzip -o {remote_zip} -d {target_path}", client=client)
-    _make_binaries_executable(target_path, client=client)
-    run_command(f"rm -f {remote_zip}", client=client, fail_on_failure=False)
+    if _is_windows_ssh(client):
+        # Expand-Archive requires an empty/missing destination differently; recreate dir.
+        ps = (
+            f"Remove-Item -LiteralPath '{target_path}' -Recurse -Force -ErrorAction SilentlyContinue; "
+            f"New-Item -ItemType Directory -Force -Path '{target_path}' | Out-Null; "
+            f"Expand-Archive -LiteralPath '{remote_zip}' -DestinationPath '{target_path}' -Force; "
+            f"Remove-Item -LiteralPath '{remote_zip}' -Force -ErrorAction SilentlyContinue"
+        )
+        logging.info(f"Unpacking remote zip {remote_zip} to {target_path} (Expand-Archive)")
+        run_command(f"powershell -NoProfile -Command \"{ps}\"", client=client)
+    else:
+        run_command(f"rm -rf {target_path}/*", client=client)
+        logging.info(f"Unpacking remote zip {remote_zip} to {target_path}")
+        run_command(f"unzip -o {remote_zip} -d {target_path}", client=client)
+        run_command(f"rm -f {remote_zip}", client=client, fail_on_failure=False)
+        _make_binaries_executable(target_path, client=client)
     logging.info(f"Remote zip {remote_zip} unpacked successfully to {target_path}")
 
 
