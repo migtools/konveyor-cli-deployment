@@ -168,7 +168,7 @@ Register the pipeline via a Konflux `IntegrationTestScenario` against stage CLI 
 | `aws-cli-e2e-credentials` | `aws_access_key_id`, `aws_secret_access_key` — AWS API access for EC2 provision, terminate, and tagging |
 | `aws-vm-ssh-key` | `ssh-privatekey` → mounted as `/secrets/aws-vm-login-key.pem` |
 | `kantra-cli-git-credentials` | `git_username`, `git_password` (GitHub PAT) — written into remote `kantra-cli-tests/.env` by `prepare_remote_host.py`. Optional for Task start; required for private-repo tests. |
-| `slack-webhook` | `url` — Slack incoming webhook / Workflow trigger URL for pass/fail notifications (same secret name as FBC E2E) |
+| `slack-webhook-cli` | `url` — CLI Slack Workflow trigger URL for pass/fail notifications (separate from UI E2E `slack-webhook`) |
 
 Create the Git credentials Secret (use a fine-scoped PAT, never commit it):
 
@@ -184,6 +184,41 @@ unset GIT_USERNAME GIT_PASSWORD
 
 Flow: Secret → Task env (`GIT_USERNAME` / `GIT_PASSWORD`) → `prepare_remote_host.py` → remote `.env`. Do not bake tokens into the git repo or Pipeline params.
 
+### Slack Workflow setup (CLI E2E)
+
+Do **not** reuse the UI E2E Workflow (`e2e UI tests on Konflux builds`). Create a dedicated Workflow, for example titled `CLI E2E on Konflux builds`, triggered by webhook, with variables matching the Tekton payload:
+
+| Variable | Meaning |
+|----------|---------|
+| `snapshot` | Konflux snapshot name |
+| `mta_version` | MTA CLI version under test |
+| `overall` | `PASSED` / `FAILED` / `INCOMPLETE` |
+| `linux` | Linux lane status |
+| `windows` | Windows lane status |
+| `darwin` | Darwin lane status |
+| `pipeline` | Konflux PipelineRun URL |
+
+Suggested message body:
+
+```text
+CLI E2E on Konflux builds
+Snapshot: {snapshot}
+MTA version: {mta_version}
+Overall: {overall}
+Linux: {linux}
+Windows: {windows}
+Darwin: {darwin}
+Link: {pipeline}
+```
+
+Create the cluster secret with the Workflow URL (leave UI `slack-webhook` unchanged):
+
+```bash
+oc create secret generic slack-webhook-cli -n art-mta-tenant \
+  --from-literal=url='https://hooks.slack.com/triggers/...' \
+  --dry-run=client -o yaml | oc apply -f -
+```
+
 ### Required IntegrationTestScenario params
 
 These have **no pipeline defaults**. If omitted or left empty, OS lanes fail before
@@ -192,7 +227,7 @@ EC2 provision (`ami and keyName are empty` / `AMI_ID: parameter null or not set`
 | Param | Purpose |
 |-------|---------|
 | `AMI_LINUX` | AMI ID for the Linux/RHEL9 E2E VM |
-| `AMI_WINDOWS` | Windows E2E AMI (pipeline default/pin: `ami-0bb5f8331976a99ba`, passwordless SSH) |
+| `AMI_WINDOWS` | Windows E2E AMI (pipeline default/pin: `ami-0745a2c03b33d9431`, passwordless SSH; previous: `ami-0bb5f8331976a99ba`) |
 | `INSTANCE_TYPE_WINDOWS` | Windows EC2 type (pinned `m7i.2xlarge` + NestedVirtualization for Podman/WSL2) |
 | `AMI_MAC` | AMI ID for the macOS (Darwin) E2E VM |
 | `KEY_NAME` | EC2 key pair name associated with the SSH key above |
@@ -209,7 +244,7 @@ oc patch integrationtestscenario ITS_NAME -n art-mta-tenant --type merge -p '{
   "spec": {
     "params": [
       {"name": "AMI_LINUX", "value": "ami-069b2e3360f9e8f50"},
-      {"name": "AMI_WINDOWS", "value": "ami-0bb5f8331976a99ba"},
+      {"name": "AMI_WINDOWS", "value": "ami-0745a2c03b33d9431"},
       {"name": "AMI_MAC", "value": "ami-0bc51312598ad4bec"},
       {"name": "INSTANCE_TYPE_LINUX", "value": "c6i.4xlarge"},
       {"name": "INSTANCE_TYPE_WINDOWS", "value": "m7i.2xlarge"},

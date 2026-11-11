@@ -156,16 +156,27 @@ def convert_to_json(file):
         raise SystemExit(f"There was an error converting string to JSON format: {err}")
 
 
-def connect_ssh(ip_address):
+def resolve_ssh_user(host_os=None):
+    """SSH username for the remote host.
+
+    Windows OpenSSH AMIs use ``administrator``; config ``ssh_user`` is ignored.
+    Linux/Darwin (and unset OS) use ``config.SSH_USER``.
+    """
+    if host_os and str(host_os).strip().lower() == "windows":
+        return "administrator"
+    return config.SSH_USER
+
+
+def connect_ssh(ip_address, host_os=None):
     SSH_HOST = ip_address
-    SSH_USER = config.SSH_USER
+    SSH_USER = resolve_ssh_user(host_os)
     SSH_KEY = config.SSH_KEY
     client = paramiko.SSHClient()
     try:
         client.load_system_host_keys()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         client.connect(SSH_HOST, username=SSH_USER, key_filename=SSH_KEY)
-        logging.info(f"Connected to host {ip_address}")
+        logging.info(f"Connected to host {ip_address} as {SSH_USER}")
         return client
     except Exception as err:
         client.close()

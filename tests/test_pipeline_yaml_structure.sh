@@ -51,7 +51,7 @@ if awk '/name: KEY_NAME/,/name: SECURITY_GROUP_ID/' "$YML" | grep -q 'default:';
   echo "KEY_NAME must not have a default" >&2
   exit 1
 fi
-grep -q 'ami-0bb5f8331976a99ba' "$YML"
+grep -q 'ami-0745a2c03b33d9431' "$YML"
 grep -q 'm7i.2xlarge' "$YML"
 grep -q 'NestedVirtualization=enabled' "$ROOT/.tekton/integration-tests/scripts/provision_ec2.sh"
 grep -q 'ami and keyName are empty' "$TASKS/run-os-e2e.yaml"
@@ -72,7 +72,7 @@ for task in verify-image-pullable prepare-workspace run-os-e2e aggregate-results
   test -f "$f"
   grep -q 'kind: Task' "$f"
 done
-grep -q 'slack-webhook' "$TASKS/slack-notification.yaml"
+grep -q 'slack-webhook-cli' "$TASKS/slack-notification.yaml"
 grep -q 'SLACK_WEBHOOK_URL' "$TASKS/slack-notification.yaml"
 
 grep -q 'name: verificationStatus' "$TASKS/verify-image-pullable.yaml"

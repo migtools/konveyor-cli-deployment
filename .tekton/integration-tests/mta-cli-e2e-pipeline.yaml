@@ -15,8 +15,8 @@
 #       (key: ssh-privatekey → file /secrets/aws-vm-login-key.pem)
 #   - kantra-cli-git-credentials: GitHub user + PAT for kantra-cli-tests .env
 #       (keys: git_username, git_password) — optional mount; needed for private-repo tests
-#   - slack-webhook: Slack incoming webhook / Workflow trigger URL (key: url)
-#       used by finally/slack-notification
+#   - slack-webhook-cli: CLI Slack Workflow trigger URL (key: url)
+#       used by finally/slack-notification (not the UI E2E slack-webhook)
 #
 # No MISC_DOWNSTREAM_URL param for v1 (stage/GA artifacts are pre-published).
 #
@@ -48,7 +48,8 @@ spec:
         Windows E2E AMI with OpenSSH launch-key injection (EC2Launch enableOpenSsh).
         Default is pinned so lanes use passwordless SSH even if ITS omits/overrides late.
       type: string
-      default: "ami-0bb5f8331976a99ba"
+      # Previous: ami-0bb5f8331976a99ba
+      default: "ami-0745a2c03b33d9431"
 
     - name: AMI_MAC
       description: AMI ID for macOS E2E VM (required; set on IntegrationTestScenario)
@@ -269,10 +270,11 @@ spec:
           value: windows
         - name: resultSubdir
           value: windows
-        # Pinned passwordless-SSH AMI (ami-0bb5f8331976a99ba). Hardcoded so a stale
+        # Pinned passwordless-SSH AMI. Hardcoded so a stale
         # IntegrationTestScenario AMI_WINDOWS value cannot override it.
+        # Previous: ami-0bb5f8331976a99ba
         - name: ami
-          value: ami-0bb5f8331976a99ba
+          value: ami-0745a2c03b33d9431
         # Pinned nested-virt instance type so ITS cannot keep c4.xlarge/t3.large
         # (Podman machine / WSL2 will not start without NestedVirtualization).
         - name: instanceType
@@ -411,7 +413,7 @@ spec:
             value: .tekton/tasks/verify-results.yaml
 
   finally:
-    # Same pattern as migtools/mta-tackle2-ui mta-fbc-e2e-pipeline slack-notification.
+    # CLI-dedicated Slack Workflow via secret slack-webhook-cli (not UI slack-webhook).
     - name: slack-notification
       when:
         - input: "run"
