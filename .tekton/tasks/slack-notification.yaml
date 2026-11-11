@@ -11,8 +11,9 @@ metadata:
     tekton.dev/displayName: "Send Slack Notification"
 spec:
   description: >-
-    Send CLI E2E results notification to Slack.
-    Reports Linux/Windows/Darwin lane status, MTA version, and a Konflux PipelineRun link.
+    Send CLI E2E results notification to a dedicated Slack Workflow
+    (not the UI E2E Workflow). Reports Linux/Windows/Darwin lane status,
+    MTA version, overall result, and a Konflux PipelineRun link.
 
   params:
     - name: linuxStatus
@@ -40,8 +41,10 @@ spec:
       description: Name of the pipeline run
     - name: slackWebhookSecretName
       type: string
-      default: "slack-webhook"
-      description: Name of the Kubernetes Secret containing Slack webhook URL
+      default: "slack-webhook-cli"
+      description: >
+        Kubernetes Secret with the CLI Slack Workflow webhook URL.
+        Separate from UI E2E slack-webhook.
     - name: slackWebhookSecretKey
       type: string
       default: "url"

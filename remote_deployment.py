@@ -81,7 +81,7 @@ def run_remote_deployment(data):
         upstream = False
 
     try:
-        client = connect_ssh(ip_address)
+        client = connect_ssh(ip_address, host_os=host_os)
     except Exception as err:
         raise SystemExit("There was an issue connecting to remote host: {}".format(err))
 
