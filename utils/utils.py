@@ -404,14 +404,14 @@ def podman_machine_init_command(client=None):
     """Build ``podman machine init`` for the target host.
 
     Windows (remote OpenSSH or local) must use Hyper-V; WSL is unreliable on EC2.
+    Resource sizing is left to Podman defaults on purpose.
     """
-    cmd = "podman machine init --cpus 2 --memory 4096 --disk-size 60"
     windows = _is_windows_ssh(client) or (
         client is None and platform.system() == "Windows"
     )
     if windows:
-        cmd += " --provider hyperv"
-    return cmd
+        return "podman machine init --provider hyperv"
+    return "podman machine init"
 
 
 def ensure_podman_running(client=None):

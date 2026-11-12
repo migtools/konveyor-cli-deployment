@@ -28,19 +28,20 @@ class PodmanMachineInitTests(unittest.TestCase):
     def test_windows_ssh_uses_hyperv_provider(self):
         client = _FakeClient("SSH-2.0-OpenSSH_for_Windows_8.1")
         cmd = podman_machine_init_command(client=client)
-        self.assertIn("--provider hyperv", cmd)
-        self.assertIn("podman machine init", cmd)
+        self.assertEqual(cmd, "podman machine init --provider hyperv")
+        self.assertNotIn("--cpus", cmd)
+        self.assertNotIn("--memory", cmd)
+        self.assertNotIn("--disk-size", cmd)
 
     def test_linux_ssh_omits_hyperv_provider(self):
         client = _FakeClient("SSH-2.0-OpenSSH_8.7")
         cmd = podman_machine_init_command(client=client)
-        self.assertNotIn("--provider hyperv", cmd)
-        self.assertIn("podman machine init", cmd)
+        self.assertEqual(cmd, "podman machine init")
 
     def test_local_windows_uses_hyperv(self):
         with mock.patch("utils.utils.platform.system", return_value="Windows"):
             cmd = podman_machine_init_command(client=None)
-        self.assertIn("--provider hyperv", cmd)
+        self.assertEqual(cmd, "podman machine init --provider hyperv")
 
 
 if __name__ == "__main__":
