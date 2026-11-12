@@ -52,7 +52,8 @@ if awk '/name: KEY_NAME/,/name: SECURITY_GROUP_ID/' "$YML" | grep -q 'default:';
   exit 1
 fi
 grep -q 'ami-0745a2c03b33d9431' "$YML"
-grep -q 'm7i.2xlarge' "$YML"
+grep -q 'c8i.4xlarge' "$YML"
+grep -q 'mac2-m1ultra.metal' "$YML"
 grep -q 'NestedVirtualization=enabled' "$ROOT/.tekton/integration-tests/scripts/provision_ec2.sh"
 grep -q 'ami and keyName are empty' "$TASKS/run-os-e2e.yaml"
 grep -q 'kantra-cli-git-credentials' "$TASKS/run-os-e2e.yaml"

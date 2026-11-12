@@ -67,15 +67,17 @@ spec:
 
     - name: INSTANCE_TYPE_WINDOWS
       description: >
-        Windows EC2 type. Must support NestedVirtualization (WSL2/Podman machine).
-        c4/t3 do not; m7i/c7i (and newer) do.
+        Windows EC2 type. Must support NestedVirtualization (Hyper-V/WSL2/Podman).
+        c4/t3 do not; m7i/c7i/c8i (and newer) do.
       type: string
-      default: "m7i.2xlarge"
+      # Previous: m7i.2xlarge
+      default: "c8i.4xlarge"
 
     - name: INSTANCE_TYPE_MAC
       description: EC2 instance type for Darwin lane
       type: string
-      default: "mac2.metal"
+      # Previous: mac2.metal
+      default: "mac2-m1ultra.metal"
 
     - name: PLATFORM_LINUX
       description: CLI binary platform for Linux lane (amd64/arm64)
@@ -88,7 +90,7 @@ spec:
       default: "amd64"
 
     - name: PLATFORM_MAC
-      description: CLI binary platform for Darwin lane (amd64/arm64); mac2.metal is arm64
+      description: CLI binary platform for Darwin lane (amd64/arm64); mac2-m1ultra.metal is arm64
       type: string
       default: "arm64"
 
@@ -276,9 +278,10 @@ spec:
         - name: ami
           value: ami-0745a2c03b33d9431
         # Pinned nested-virt instance type so ITS cannot keep c4.xlarge/t3.large
-        # (Podman machine / WSL2 will not start without NestedVirtualization).
+        # (Podman machine / Hyper-V will not start without NestedVirtualization).
+        # Previous: m7i.2xlarge
         - name: instanceType
-          value: m7i.2xlarge
+          value: c8i.4xlarge
         - name: sshUser
           value: $(params.SSH_USER_WINDOWS)
         - name: platform
@@ -320,7 +323,7 @@ spec:
     - name: darwin-e2e
       runAfter:
         - prepare-workspace
-      # mac2.metal dedicated-host boot can take a long time before SSH is up.
+      # mac2-m1ultra.metal dedicated-host boot can take a long time before SSH is up.
       timeout: "3h"
       params:
         - name: targetOs
@@ -347,7 +350,7 @@ spec:
           value: $(params.TEST_COMMAND)
         - name: failureTtlHours
           value: $(params.FAILURE_TTL_HOURS)
-        # mac2.metal / dedicated-host boot often exceeds the default 10-minute SSH budget.
+        # mac2-m1ultra.metal / dedicated-host boot often exceeds the default 10-minute SSH budget.
         - name: sshRetries
           value: "180"
         - name: pipelineRunName
