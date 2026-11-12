@@ -400,11 +400,25 @@ def _podman_ready(out, err):
     )
 
 
+def podman_machine_init_command(client=None):
+    """Build ``podman machine init`` for the target host.
+
+    Windows (remote OpenSSH or local) must use Hyper-V; WSL is unreliable on EC2.
+    """
+    cmd = "podman machine init --cpus 2 --memory 4096 --disk-size 60"
+    windows = _is_windows_ssh(client) or (
+        client is None and platform.system() == "Windows"
+    )
+    if windows:
+        cmd += " --provider hyperv"
+    return cmd
+
+
 def ensure_podman_running(client=None):
     """
     Ensures that Podman is running (either locally or remotely).
     Inits the default machine if missing, then starts it and waits.
-    On Windows EC2 this requires NestedVirtualization (WSL2/Hyper-V).
+    On Windows EC2 this requires NestedVirtualization (Hyper-V).
     """
     print("Checking Podman status...")
 
@@ -422,11 +436,9 @@ def ensure_podman_running(client=None):
     )
     inspect_text = f"{inspect_out or ''}{inspect_err or ''}"
     if "Error" in inspect_text or "no such machine" in inspect_text.lower() or not inspect_out.strip():
-        run_command(
-            "podman machine init --cpus 2 --memory 4096 --disk-size 60",
-            fail_on_failure=False,
-            client=client,
-        )
+        init_cmd = podman_machine_init_command(client=client)
+        print(f"Initializing Podman machine: {init_cmd}")
+        run_command(init_cmd, fail_on_failure=False, client=client)
     start_out, start_err = run_command(
         "podman machine start",
         fail_on_failure=False,
@@ -454,9 +466,9 @@ def ensure_podman_running(client=None):
 
     print("❌ Failed to start Podman machine.")
     print(
-        "On Windows EC2, Podman needs WSL2/Hyper-V and NestedVirtualization "
-        "(use m7i/c7i+ with --cpu-options NestedVirtualization=enabled; "
-        "c4/t3 will not work)."
+        "On Windows EC2, Podman needs Hyper-V and NestedVirtualization "
+        "(use c8i/m7i/c7i+ with --cpu-options NestedVirtualization=enabled; "
+        "c4/t3 will not work). Init with: podman machine init --provider hyperv"
     )
     raise SystemExit(1)
 

@@ -51,7 +51,8 @@ if awk '/name: KEY_NAME/,/name: SECURITY_GROUP_ID/' "$YML" | grep -q 'default:';
   echo "KEY_NAME must not have a default" >&2
   exit 1
 fi
-grep -q 'ami-08450e755659c9c46' "$YML"
+grep -q 'ami-07960d65358b16605' "$YML"
+grep -q 'provider hyperv' "$ROOT/utils/utils.py"
 grep -q 'c8i.4xlarge' "$YML"
 grep -q 'mac2-m1ultra.metal' "$YML"
 grep -q 'NestedVirtualization=enabled' "$ROOT/.tekton/integration-tests/scripts/provision_ec2.sh"
