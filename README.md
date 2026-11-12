@@ -227,7 +227,7 @@ EC2 provision (`ami and keyName are empty` / `AMI_ID: parameter null or not set`
 | Param | Purpose |
 |-------|---------|
 | `AMI_LINUX` | AMI ID for the Linux/RHEL9 E2E VM |
-| `AMI_WINDOWS` | Windows E2E AMI (pipeline default/pin: `ami-07960d65358b16605`, Podman+Hyper-V; previous: `ami-08450e755659c9c46`) |
+| `AMI_WINDOWS` | Windows E2E AMI (pipeline default/pin: `ami-008b09426f430e3e3`, Podman+Hyper-V; previous: `ami-07960d65358b16605`) |
 | `INSTANCE_TYPE_WINDOWS` | Windows EC2 type (pinned `c8i.4xlarge` + NestedVirtualization for Podman/Hyper-V; previous: `m7i.2xlarge`) |
 | (provision) `ROOT_VOLUME_GB` | Root EBS size at launch (default **100** GiB gp3 via `provision_ec2.sh`; independent of instance type) |
 | `AMI_MAC` | AMI ID for the macOS (Darwin) E2E VM |
@@ -245,7 +245,7 @@ oc patch integrationtestscenario ITS_NAME -n art-mta-tenant --type merge -p '{
   "spec": {
     "params": [
       {"name": "AMI_LINUX", "value": "ami-069b2e3360f9e8f50"},
-      {"name": "AMI_WINDOWS", "value": "ami-07960d65358b16605"},
+      {"name": "AMI_WINDOWS", "value": "ami-008b09426f430e3e3"},
       {"name": "AMI_MAC", "value": "ami-0bc51312598ad4bec"},
       {"name": "INSTANCE_TYPE_LINUX", "value": "c6i.4xlarge"},
       {"name": "INSTANCE_TYPE_WINDOWS", "value": "c8i.4xlarge"},
