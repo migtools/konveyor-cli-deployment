@@ -48,8 +48,8 @@ spec:
         Windows E2E AMI with OpenSSH launch-key injection (EC2Launch enableOpenSsh).
         Default is pinned so lanes use passwordless SSH even if ITS omits/overrides late.
       type: string
-      # Previous: ami-0745a2c03b33d9431 (earlier: ami-0bb5f8331976a99ba)
-      default: "ami-08450e755659c9c46"
+      # Previous: ami-08450e755659c9c46 (earlier: ami-0745a2c03b33d9431)
+      default: "ami-07960d65358b16605"
 
     - name: AMI_MAC
       description: AMI ID for macOS E2E VM (required; set on IntegrationTestScenario)
@@ -274,9 +274,9 @@ spec:
           value: windows
         # Pinned passwordless-SSH AMI. Hardcoded so a stale
         # IntegrationTestScenario AMI_WINDOWS value cannot override it.
-        # Previous: ami-0745a2c03b33d9431 (earlier: ami-0bb5f8331976a99ba)
+        # Previous: ami-08450e755659c9c46 (earlier: ami-0745a2c03b33d9431)
         - name: ami
-          value: ami-08450e755659c9c46
+          value: ami-07960d65358b16605
         # Pinned nested-virt instance type so ITS cannot keep c4.xlarge/t3.large
         # (Podman machine / Hyper-V will not start without NestedVirtualization).
         # Previous: m7i.2xlarge
