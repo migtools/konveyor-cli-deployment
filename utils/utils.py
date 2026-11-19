@@ -391,28 +391,13 @@ def write_env_file(env_path, env_dict, client=None):
         logging.info(f"✅ Local .env file written to {env_path}")
 
 def _podman_ready(out, err):
-    """True when ``podman images`` shows a usable API (not merely non-empty stderr)."""
     text = f"{out or ''}{err or ''}"
-    lower = text.lower()
-    failure_markers = (
-        "cannot connect",
-        "unable to connect",
-        "actively refused",
-        "no such machine",
-        "error:",
+    return not (
+        err
+        or "Error:" in text
+        or "Cannot connect" in text
+        or "Error:" in (out or "")
     )
-    if any(m in lower for m in failure_markers):
-        return False
-    # Empty table is fine; require the images header so we do not treat blank output as ready.
-    return "REPOSITORY" in text
-
-
-def _podman_machine_ssh_ready(out, err):
-    text = f"{out or ''}{err or ''}"
-    lower = text.lower()
-    if any(m in lower for m in ("error:", "cannot connect", "unable to connect", "refused")):
-        return False
-    return "ok" in (out or "").lower()
 
 
 def podman_machine_init_command(client=None):
@@ -434,14 +419,8 @@ def ensure_podman_running(client=None):
     Ensures that Podman is running (either locally or remotely).
     Inits the default machine if missing, then starts it and waits.
     On Windows EC2 this requires NestedVirtualization (Hyper-V).
-
-    Hyper-V often prints "started successfully" before the localhost SSH
-    proxy (gvproxy) is listening; wait for machine ssh + podman images.
     """
     print("Checking Podman status...")
-    windows = _is_windows_ssh(client) or (
-        client is None and platform.system() == "Windows"
-    )
 
     out, err = run_command("podman images", fail_on_failure=False, client=client)
     if _podman_ready(out, err):
@@ -476,45 +455,20 @@ def ensure_podman_running(client=None):
             f"machine start stderr:\n{start_err}"
         )
 
-    # Hyper-V: start can succeed minutes before 127.0.0.1:<port> accepts SSH.
-    attempts = 60 if windows else 30
-    sleep_s = 10 if windows else 6
-    restarted = False
-    for attempt in range(1, attempts + 1):
-        time.sleep(sleep_s)
-        ssh_out, ssh_err = run_command(
-            "podman machine ssh -- echo ok",
-            fail_on_failure=False,
-            client=client,
-        )
-        if not _podman_machine_ssh_ready(ssh_out, ssh_err):
-            print(
-                f"Waiting for Podman machine SSH (attempt {attempt}/{attempts}) "
-                f"out={ssh_out!r} err={ssh_err!r}"
-            )
-        else:
-            out2, err2 = run_command("podman images", fail_on_failure=False, client=client)
-            if _podman_ready(out2, err2):
-                print(f"Podman API ready (attempt {attempt}).")
-                return
-            print(
-                f"machine ssh ok; waiting for Podman API (attempt {attempt}/{attempts}) "
-                f"out={out2!r} err={err2!r}"
-            )
-
-        # One mid-wait restart — gvproxy/port forward sometimes needs a kick.
-        if windows and not restarted and attempt == 20:
-            print("Podman still not ready; restarting machine once...")
-            run_command("podman machine stop", fail_on_failure=False, client=client)
-            run_command("podman machine start", fail_on_failure=False, client=client)
-            restarted = True
+    # WSL2/Hyper-V boot can take well over a few seconds on a fresh VM.
+    for attempt in range(1, 31):
+        time.sleep(6)
+        out2, err2 = run_command("podman images", fail_on_failure=False, client=client)
+        if _podman_ready(out2, err2):
+            print(f"Podman machine started successfully (attempt {attempt}).")
+            return
+        print(f"Waiting for Podman (attempt {attempt}/30)...")
 
     print("❌ Failed to start Podman machine.")
     print(
         "On Windows EC2, Podman needs Hyper-V and NestedVirtualization "
         "(use c8i/m7i/c7i+ with --cpu-options NestedVirtualization=enabled; "
-        "c4/t3 will not work). Init with: podman machine init --provider hyperv. "
-        "Also verify: podman machine ssh -- echo ok && podman images"
+        "c4/t3 will not work). Init with: podman machine init --provider hyperv"
     )
     raise SystemExit(1)
 
