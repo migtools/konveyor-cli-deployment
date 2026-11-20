@@ -390,6 +390,9 @@ def write_env_file(env_path, env_dict, client=None):
             f.write(content)
         logging.info(f"✅ Local .env file written to {env_path}")
 
+PODMAN_START_TASK_NAME = "StartPodmanMachine"
+
+
 def _podman_ready(out, err):
     text = f"{out or ''}{err or ''}"
     return not (
@@ -414,48 +417,76 @@ def podman_machine_init_command(client=None):
     return "podman machine init"
 
 
+def podman_start_task_command(task_name=PODMAN_START_TASK_NAME):
+    """Windows: kick the AMI scheduled task that starts Podman/Hyper-V machine."""
+    return f'schtasks /Run /TN "{task_name}"'
+
+
+def schtasks_run_failed(out, err):
+    """True when ``schtasks /Run`` reported failure (often on stdout)."""
+    combined = f"{out or ''}{err or ''}"
+    upper = combined.upper()
+    if "ERROR:" in upper:
+        return True
+    if "cannot find" in combined.lower():
+        return True
+    return False
+
+
 def ensure_podman_running(client=None):
     """
     Ensures that Podman is running (either locally or remotely).
-    Inits the default machine if missing, then starts it and waits.
-    On Windows EC2 this requires NestedVirtualization (Hyper-V).
+    Windows EC2: trigger AMI scheduled task ``StartPodmanMachine``, then wait.
+    Linux/macOS: init/start the default machine if needed, then wait.
     """
     print("Checking Podman status...")
+    windows = _is_windows_ssh(client) or (
+        client is None and platform.system() == "Windows"
+    )
 
     out, err = run_command("podman images", fail_on_failure=False, client=client)
     if _podman_ready(out, err):
         print("Podman is already running.")
         return
 
-    print("Podman is not ready. Ensuring default machine exists, then starting it...")
-    # Avoid bash-only `||` / redirects — Windows OpenSSH has no bash by default.
-    inspect_out, inspect_err = run_command(
-        "podman machine inspect podman-machine-default",
-        fail_on_failure=False,
-        client=client,
-    )
-    inspect_text = f"{inspect_out or ''}{inspect_err or ''}"
-    if "Error" in inspect_text or "no such machine" in inspect_text.lower() or not inspect_out.strip():
-        init_cmd = podman_machine_init_command(client=client)
-        print(f"Initializing Podman machine: {init_cmd}")
-        run_command(init_cmd, fail_on_failure=False, client=client)
-    start_out, start_err = run_command(
-        "podman machine start",
-        fail_on_failure=False,
-        client=client,
-    )
-    print(f"podman machine start stdout:\n{start_out}")
-    print(f"podman machine start stderr:\n{start_err}")
-    if start_err and "not recognized" in start_err.lower():
-        where_out, where_err = run_command("where podman", fail_on_failure=False, client=client)
-        raise SystemExit(
-            "podman is not on PATH for this Windows OpenSSH session "
-            "(even after restoring Machine+User PATH). "
-            f"where podman => out={where_out!r} err={where_err!r}\n"
-            f"machine start stderr:\n{start_err}"
+    if windows:
+        print(
+            f'Podman is not ready. Triggering scheduled task '
+            f'"{PODMAN_START_TASK_NAME}"...'
         )
+        run_out, run_err = run_command(
+            podman_start_task_command(),
+            fail_on_failure=False,
+            client=client,
+        )
+        print(f"schtasks stdout:\n{run_out}")
+        print(f"schtasks stderr:\n{run_err}")
+        if schtasks_run_failed(run_out, run_err):
+            raise SystemExit(
+                f"Failed to trigger scheduled task '{PODMAN_START_TASK_NAME}':\n"
+                f"stdout: {run_out}\nstderr: {run_err}"
+            )
+    else:
+        print("Podman is not ready. Ensuring default machine exists, then starting it...")
+        inspect_out, inspect_err = run_command(
+            "podman machine inspect podman-machine-default",
+            fail_on_failure=False,
+            client=client,
+        )
+        inspect_text = f"{inspect_out or ''}{inspect_err or ''}"
+        if "Error" in inspect_text or "no such machine" in inspect_text.lower() or not inspect_out.strip():
+            init_cmd = podman_machine_init_command(client=client)
+            print(f"Initializing Podman machine: {init_cmd}")
+            run_command(init_cmd, fail_on_failure=False, client=client)
+        start_out, start_err = run_command(
+            "podman machine start",
+            fail_on_failure=False,
+            client=client,
+        )
+        print(f"podman machine start stdout:\n{start_out}")
+        print(f"podman machine start stderr:\n{start_err}")
 
-    # WSL2/Hyper-V boot can take well over a few seconds on a fresh VM.
+    # Hyper-V/task start can return before the API socket is usable.
     for attempt in range(1, 31):
         time.sleep(6)
         out2, err2 = run_command("podman images", fail_on_failure=False, client=client)
@@ -465,11 +496,11 @@ def ensure_podman_running(client=None):
         print(f"Waiting for Podman (attempt {attempt}/30)...")
 
     print("❌ Failed to start Podman machine.")
-    print(
-        "On Windows EC2, Podman needs Hyper-V and NestedVirtualization "
-        "(use c8i/m7i/c7i+ with --cpu-options NestedVirtualization=enabled; "
-        "c4/t3 will not work). Init with: podman machine init --provider hyperv"
-    )
+    if windows:
+        print(
+            f'Check scheduled task "{PODMAN_START_TASK_NAME}" on the Windows AMI '
+            "(exists, runs as Administrator, starts Podman/Hyper-V machine)."
+        )
     raise SystemExit(1)
 
 def normalise_url(version, url):
