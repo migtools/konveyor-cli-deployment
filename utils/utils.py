@@ -391,6 +391,11 @@ def write_env_file(env_path, env_dict, client=None):
         logging.info(f"✅ Local .env file written to {env_path}")
 
 PODMAN_START_TASK_NAME = "StartPodmanMachine"
+# Hyper-V cold start (init + boot) on Windows EC2 often needs 4–6+ minutes;
+# 30×6s (~3 min) was too short for ami-0fb886ab7bd0ab3ba (gave up ~20s early).
+PODMAN_READY_ATTEMPTS_WINDOWS = 60
+PODMAN_READY_ATTEMPTS_DEFAULT = 30
+PODMAN_READY_SLEEP_SEC = 10
 
 
 def _podman_ready(out, err):
@@ -486,16 +491,27 @@ def ensure_podman_running(client=None):
         print(f"podman machine start stdout:\n{start_out}")
         print(f"podman machine start stderr:\n{start_err}")
 
-    # Hyper-V/task start can return before the API socket is usable.
-    for attempt in range(1, 31):
-        time.sleep(6)
+    # Hyper-V/task start returns before the API socket is usable; cold init+boot
+    # of a 100GiB machine regularly exceeds three minutes on Windows EC2.
+    attempts = (
+        PODMAN_READY_ATTEMPTS_WINDOWS if windows else PODMAN_READY_ATTEMPTS_DEFAULT
+    )
+    last_out, last_err = "", ""
+    for attempt in range(1, attempts + 1):
+        time.sleep(PODMAN_READY_SLEEP_SEC)
         out2, err2 = run_command("podman images", fail_on_failure=False, client=client)
+        last_out, last_err = out2 or "", err2 or ""
         if _podman_ready(out2, err2):
             print(f"Podman machine started successfully (attempt {attempt}).")
             return
-        print(f"Waiting for Podman (attempt {attempt}/30)...")
+        print(f"Waiting for Podman (attempt {attempt}/{attempts})...")
+        if attempt == 1 or attempt % 5 == 0:
+            print(f"podman images stdout:\n{last_out}")
+            print(f"podman images stderr:\n{last_err}")
 
     print("❌ Failed to start Podman machine.")
+    print(f"Last podman images stdout:\n{last_out}")
+    print(f"Last podman images stderr:\n{last_err}")
     if windows:
         print(
             f'Check scheduled task "{PODMAN_START_TASK_NAME}" on the Windows AMI '
