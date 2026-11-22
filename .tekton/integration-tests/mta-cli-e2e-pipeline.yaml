@@ -40,7 +40,9 @@ spec:
     # "AMI_ID: parameter null or not set" after a long prepare. Set these on the
     # IntegrationTestScenario (params).
     - name: AMI_LINUX
-      description: AMI ID for Linux/RHEL9 E2E VM (required; set on IntegrationTestScenario)
+      description: >
+        AMI ID for Linux/RHEL9 E2E VM (required; set on IntegrationTestScenario).
+        Recommended: ami-04dd36b6aeba53427 (Java 25). Previous: ami-069b2e3360f9e8f50 (Java 21).
       type: string
 
     - name: AMI_WINDOWS
