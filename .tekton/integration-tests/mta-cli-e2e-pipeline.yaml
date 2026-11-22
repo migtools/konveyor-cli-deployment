@@ -47,10 +47,10 @@ spec:
 
     - name: AMI_WINDOWS
       description: >
-        Windows E2E AMI with OpenSSH launch-key injection (EC2Launch enableOpenSsh).
-        Default is pinned so lanes use passwordless SSH even if ITS omits/overrides late.
+        Windows E2E AMI (OpenSSH + Podman/Hyper-V + StartPodmanMachine task).
+        Set on IntegrationTestScenario; default used if ITS omits it.
+        Recommended: ami-0fb886ab7bd0ab3ba. Previous: ami-008b09426f430e3e3.
       type: string
-      # Previous: ami-008b09426f430e3e3
       default: "ami-0fb886ab7bd0ab3ba"
 
     - name: AMI_MAC
@@ -274,11 +274,8 @@ spec:
           value: windows
         - name: resultSubdir
           value: windows
-        # Pinned passwordless-SSH AMI. Hardcoded so a stale
-        # IntegrationTestScenario AMI_WINDOWS value cannot override it.
-        # Previous: ami-008b09426f430e3e3
         - name: ami
-          value: ami-0fb886ab7bd0ab3ba
+          value: $(params.AMI_WINDOWS)
         # Pinned nested-virt instance type so ITS cannot keep c4.xlarge/t3.large
         # (Podman machine / Hyper-V will not start without NestedVirtualization).
         # Previous: m7i.2xlarge
