@@ -38,7 +38,7 @@ out_win="$(TARGET_OS=windows "$ROOT/.tekton/integration-tests/scripts/art_pytest
   exit 1
 }
 # AMI_LINUX / AMI_MAC / KEY_NAME must not default to "" (hides missing ITS config).
-# AMI_WINDOWS is pinned to the passwordless OpenSSH AMI (default + hardcoded lane value).
+# AMI_WINDOWS may have a pipeline default; both OS lanes take ami from params.
 if awk '/name: AMI_LINUX$/,/name: AMI_WINDOWS$/' "$YML" | grep -q 'default:'; then
   echo "AMI_LINUX must not have a default" >&2
   exit 1
@@ -52,6 +52,8 @@ if awk '/name: KEY_NAME/,/name: SECURITY_GROUP_ID/' "$YML" | grep -q 'default:';
   exit 1
 fi
 grep -q 'ami-0fb886ab7bd0ab3ba' "$YML"
+grep -q 'value: \$(params.AMI_WINDOWS)' "$YML"
+grep -q 'value: \$(params.AMI_LINUX)' "$YML"
 grep -q 'provider hyperv' "$ROOT/utils/utils.py"
 grep -q 'c8i.4xlarge' "$YML"
 grep -q 'mac2-m1ultra.metal' "$YML"

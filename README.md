@@ -227,7 +227,7 @@ EC2 provision (`ami and keyName are empty` / `AMI_ID: parameter null or not set`
 | Param | Purpose |
 |-------|---------|
 | `AMI_LINUX` | AMI ID for the Linux/RHEL9 E2E VM (example: `ami-04dd36b6aeba53427`, Java 25; previous: `ami-069b2e3360f9e8f50` / Java 21) |
-| `AMI_WINDOWS` | Windows E2E AMI (pipeline default/pin: `ami-0fb886ab7bd0ab3ba`, Podman+Hyper-V + StartPodmanMachine task; previous: `ami-008b09426f430e3e3`) |
+| `AMI_WINDOWS` | Windows E2E AMI (set on ITS; pipeline default `ami-0fb886ab7bd0ab3ba`, Podman+Hyper-V + StartPodmanMachine; previous: `ami-008b09426f430e3e3`) |
 | `INSTANCE_TYPE_WINDOWS` | Windows EC2 type (pinned `c8i.4xlarge` + NestedVirtualization for Podman/Hyper-V; previous: `m7i.2xlarge`) |
 | (provision) `ROOT_VOLUME_GB` | Root EBS size at launch (default **100** GiB gp3 via `provision_ec2.sh`; independent of instance type) |
 | `AMI_MAC` | AMI ID for the macOS (Darwin) E2E VM |
