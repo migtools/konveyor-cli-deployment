@@ -49,9 +49,9 @@ spec:
       description: >
         Windows E2E AMI (OpenSSH + Podman/Hyper-V + StartPodmanMachine task).
         Set on IntegrationTestScenario; default used if ITS omits it.
-        Recommended: ami-0fb886ab7bd0ab3ba. Previous: ami-008b09426f430e3e3.
+        Recommended: ami-0a7c129db8896d956 (100GiB NTFS). Previous: ami-0fb886ab7bd0ab3ba.
       type: string
-      default: "ami-0fb886ab7bd0ab3ba"
+      default: "ami-0a7c129db8896d956"
 
     - name: AMI_MAC
       description: AMI ID for macOS E2E VM (required; set on IntegrationTestScenario)
