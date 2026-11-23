@@ -229,7 +229,7 @@ EC2 provision (`ami and keyName are empty` / `AMI_ID: parameter null or not set`
 | `AMI_LINUX` | AMI ID for the Linux/RHEL9 E2E VM (example: `ami-04dd36b6aeba53427`, Java 25; previous: `ami-069b2e3360f9e8f50` / Java 21) |
 | `AMI_WINDOWS` | Windows E2E AMI (set on ITS; pipeline default `ami-0fb886ab7bd0ab3ba`, Podman+Hyper-V + StartPodmanMachine; previous: `ami-008b09426f430e3e3`) |
 | `INSTANCE_TYPE_WINDOWS` | Windows EC2 type (pinned `c8i.4xlarge` + NestedVirtualization for Podman/Hyper-V; previous: `m7i.2xlarge`) |
-| (provision) `ROOT_VOLUME_GB` | Root EBS size at launch (default **100** GiB gp3 via `provision_ec2.sh`; independent of instance type) |
+| (provision) `ROOT_VOLUME_GB` | Root EBS size at launch (default **100** GiB gp3 via `provision_ec2.sh`; independent of instance type). Windows still needs an NTFS extend when the AMI partition is smaller — pipeline/`start-podman.ps1` grow `C:` before Podman; nested Podman disk defaults to **40** GiB (`--disk-size`), not the full Windows root. |
 | `AMI_MAC` | AMI ID for the macOS (Darwin) E2E VM |
 | `KEY_NAME` | EC2 key pair name associated with the SSH key above |
 | `SECURITY_GROUP_ID` | Security group for EC2 instances (usually required) |
@@ -241,6 +241,8 @@ Example values (from the Jenkins `create_vm.sh` AMI map; confirm they still exis
 
 ```bash
 # Replace ITS_NAME with: oc get integrationtestscenario -n art-mta-tenant
+# Prefer --type merge with the full params list (JSON replace of /spec/params
+# alone drops every other entry — KEY_NAME, SECURITY_GROUP_ID, etc.).
 oc patch integrationtestscenario ITS_NAME -n art-mta-tenant --type merge -p '{
   "spec": {
     "params": [

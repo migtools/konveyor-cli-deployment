@@ -398,6 +398,8 @@ PODMAN_READY_ATTEMPTS_DEFAULT = 30
 PODMAN_READY_SLEEP_SEC = 10
 # Wait for StartPodmanMachine to leave Running before deciding it failed empty.
 PODMAN_TASK_SETTLE_ATTEMPTS = 30
+# Nested Podman VHDx size (GiB). Independent of Windows root EBS (often 100GiB).
+PODMAN_MACHINE_DISK_GIB = 40
 
 
 def _podman_ready(out, err):
@@ -423,17 +425,34 @@ def podman_machine_missing(out, err):
     return False
 
 
+def windows_extend_root_partition_command():
+    """Grow C: into unused space on a larger EC2 root volume (idempotent)."""
+    # Invoked via cmd through _windows_remote_command; call powershell explicitly.
+    return (
+        "powershell -NoProfile -Command "
+        "\"$s = Get-PartitionSupportedSize -DriveLetter C; "
+        "$p = Get-Partition -DriveLetter C; "
+        "if ($p.Size -lt $s.SizeMax) { "
+        "Write-Output ('Extending C: from {0} to {1}' -f $p.Size, $s.SizeMax); "
+        "Resize-Partition -DriveLetter C -Size $s.SizeMax "
+        "} else { Write-Output 'C: already uses full disk' }\""
+    )
+
+
 def podman_machine_init_command(client=None):
     """Build ``podman machine init`` for the target host.
 
     Windows (remote OpenSSH or local) must use Hyper-V; WSL is unreliable on EC2.
-    Resource sizing is left to Podman defaults on purpose.
+    Cap nested disk size so a default ~100GiB VHDx cannot fill the Windows root.
     """
     windows = _is_windows_ssh(client) or (
         client is None and platform.system() == "Windows"
     )
     if windows:
-        return "podman machine init --provider hyperv"
+        return (
+            "podman machine init --provider hyperv "
+            f"--disk-size {PODMAN_MACHINE_DISK_GIB}"
+        )
     return "podman machine init"
 
 
@@ -507,6 +526,16 @@ def ensure_podman_running(client=None):
         return
 
     if windows:
+        # EBS may already be 100GiB while the AMI NTFS partition is still ~40GiB.
+        print("Ensuring Windows C: fills the EC2 root volume...")
+        ext_out, ext_err = run_command(
+            windows_extend_root_partition_command(),
+            fail_on_failure=False,
+            client=client,
+        )
+        print(f"extend C: stdout:\n{ext_out}")
+        print(f"extend C: stderr:\n{ext_err}")
+
         print(
             f'Podman is not ready. Triggering scheduled task '
             f'"{PODMAN_START_TASK_NAME}"...'
