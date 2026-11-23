@@ -268,7 +268,8 @@ spec:
     - name: windows-e2e
       runAfter:
         - prepare-workspace
-      timeout: "2h"
+      # Windows tier0 often exceeds 2h wall time (provision + Podman + pytest).
+      timeout: "4h"
       params:
         - name: targetOs
           value: windows

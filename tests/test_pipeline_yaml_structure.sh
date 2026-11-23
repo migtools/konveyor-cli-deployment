@@ -112,6 +112,7 @@ if grep -qE '^[[:space:]]*timeout:' "$TASKS/prepare-workspace.yaml"; then
 fi
 grep -qE '^[[:space:]]*timeout:[[:space:]]*"20m"' "$YML"
 grep -qE '^[[:space:]]*timeout:[[:space:]]*"2h"' "$YML"
+grep -qE '^[[:space:]]*timeout:[[:space:]]*"4h"' "$YML"
 grep -q 'emptyDir' "$TASKS/run-os-e2e.yaml"
 # Pinned ubi9/python-311 patch tags are often GC'd (ImagePullBackOff).
 grep -q 'ubi9/python-311:latest' "$TASKS/run-os-e2e.yaml"
