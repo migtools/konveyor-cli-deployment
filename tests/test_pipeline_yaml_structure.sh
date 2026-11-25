@@ -51,7 +51,7 @@ if awk '/name: KEY_NAME/,/name: SECURITY_GROUP_ID/' "$YML" | grep -q 'default:';
   echo "KEY_NAME must not have a default" >&2
   exit 1
 fi
-grep -q 'ami-0a7c129db8896d956' "$YML"
+grep -q 'ami-04b08cb6069c99203' "$YML"
 grep -q 'value: \$(params.AMI_WINDOWS)' "$YML"
 grep -q 'value: \$(params.AMI_LINUX)' "$YML"
 grep -q 'provider hyperv' "$ROOT/utils/utils.py"
